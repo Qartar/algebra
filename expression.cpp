@@ -521,18 +521,18 @@ expression parse(token const*& tokens, token const* end)
         lhs = parse(++tokens, end);
         assert(*tokens == ')');
         ++tokens;
-    }
 
     //
     //  functions
     //
 
-    if (tokens[0] == "ln") {
+    } else if (tokens[0] == "ln") {
+        ++tokens;
         assert(*tokens == '(');
         lhs = parse(++tokens, end);
         assert(*tokens == ')');
         ++tokens;
-        lhs = op{op_type::logarithm, constant::e, lhs};
+        lhs = op{op_type::logarithm, lhs, constant::e};
     } else if (tokens[0] == "log") {
         lhs = parse_binary_fn(op_type::logarithm, ++tokens, end);
     } else if (tokens[0] == "sin") {
