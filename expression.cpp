@@ -191,6 +191,13 @@ transform transforms[] = {
                                                                                                      op{op_type::product, op{op_type::sine, placeholder::x},
                                                                                                                           op{op_type::sine, placeholder::y}}} },
 
+    //      sin(2pi + x)  <=>  sin(x)
+    { op{op_type::sine, op{op_type::sum, constant::twopi, placeholder::x}}, op{op_type::sine, placeholder::x} },
+    //      cos(2pi + x)  <=>  cos(x)
+    { op{op_type::cosine, op{op_type::sum, constant::twopi, placeholder::x}}, op{op_type::cosine, placeholder::x} },
+    //      tan(2pi + x)  <=>  tan(x)
+    { op{op_type::tangent, op{op_type::sum, constant::twopi, placeholder::x}}, op{op_type::tangent, placeholder::x} },
+
     //      sin(2x)  <=>  2 * sin(x) * cos(x)
     //      cos(2x)  <=>  cos²(x) - sin²(x)
     //      cos(2x)  <=>  2 * cos²(x) - 1
@@ -633,6 +640,40 @@ expression parse(char const* str)
 }
 
 //------------------------------------------------------------------------------
+int compare(expression const& lhs, expression const& rhs)
+{
+    std::ptrdiff_t d = lhs.index() - rhs.index();
+    if (d < 0) {
+        return -1;
+    } else if (d == 0) {
+        if (std::holds_alternative<op>(lhs) && std::holds_alternative<op>(rhs)) {
+            op const& lhs_op = std::get<op>(lhs);
+            op const& rhs_op = std::get<op>(rhs);
+            if (lhs_op.type < rhs_op.type) {
+                return -1;
+            } else if (lhs_op.type == rhs_op.type) {
+                int d2 = compare(lhs_op.lhs, rhs_op.lhs);
+                if (d2 < 0) {
+                    return -1;
+                } else if (d2 == 0) {
+                    return compare(lhs_op.rhs, rhs_op.rhs);
+                } else {
+                    return 1;
+                }
+            } else {
+                return 1;
+            }
+        } else {
+            // FIXME!
+            assert(0);
+            return 0;
+        }
+    } else {
+        return 1;
+    }
+}
+
+//------------------------------------------------------------------------------
 struct expression_cmp
 {
     bool operator()(expression const& lhs, expression const& rhs) const
@@ -797,7 +838,7 @@ void bar()
             break;
         }
 
-        simplify(parse(line.c_str()), 32, 128);
+        simplify(parse(line.c_str()), 32, 256);
     }
 }
 
