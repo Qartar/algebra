@@ -465,9 +465,9 @@ std::vector<token> tokenize(char const* str)
                 continue;
         }
 
-        if (*str >= '0' && *str < '9' || *str == '.') {
+        if (*str >= '0' && *str <= '9' || *str == '.') {
             bool has_dot = false;
-            while (*str >= '0' && *str < '9' || (!has_dot && *str == '.')) {
+            while (*str >= '0' && *str <= '9' || (!has_dot && *str == '.')) {
                 if (*str == '.') {
                     has_dot = true;
                 }
