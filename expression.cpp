@@ -139,7 +139,7 @@ transform transforms[] = {
     //      cot(x)  <=>  1 / tan(x)
     { op{op_type::cotangent, placeholder::x}, op{op_type::quotient, constant::one, op{op_type::tangent, placeholder::x}} },
     //      1  <=>  sin²(x) + cos²(x)
-    { constant::one, op{op_type::sum, op{op_type::exponent, op{op_type::sine, placeholder::x}, 2.0}, op{op_type::exponent, op{op_type::cosine, placeholder::x}, 2.0}} },
+    { constant::one, op{op_type::sum, op{op_type::exponent, op{op_type::sine, placeholder::x}, constant::two}, op{op_type::exponent, op{op_type::cosine, placeholder::x}, constant::two}} },
 
     //      sin(-x) = -sin(x)
     { op{op_type::sine, op{op_type::difference, constant::zero, placeholder::x}}, op{op_type::difference, constant::zero, op{op_type::sine, placeholder::x}} },
@@ -180,16 +180,16 @@ transform transforms[] = {
                                                                                                           op{op_type::product, op{op_type::cosine, placeholder::x},
                                                                                                                                op{op_type::sine, placeholder::y}}} },
 
-    //      cos(x + y)  <=>  cos(x) * cos(y) + sin(x) * sin(y)
-    { op{op_type::cosine, op{op_type::sum, placeholder::x, placeholder::y}}, op{op_type::sum, op{op_type::product, op{op_type::cosine, placeholder::x},
-                                                                                                                   op{op_type::cosine, placeholder::y}},
-                                                                                              op{op_type::product, op{op_type::sine, placeholder::x},
-                                                                                                                   op{op_type::sine, placeholder::y}}} },
-    //      cos(x - y)  <=>  cos(x) * cos(y) - sin(x) * sin(y)
-    { op{op_type::cosine, op{op_type::difference, placeholder::x, placeholder::y}}, op{op_type::difference, op{op_type::product, op{op_type::cosine, placeholder::x},
-                                                                                                                                 op{op_type::cosine, placeholder::y}},
-                                                                                                            op{op_type::product, op{op_type::sine, placeholder::x},
-                                                                                                                                 op{op_type::sine, placeholder::y}}} },
+    //      cos(x + y)  <=>  cos(x) * cos(y) - sin(x) * sin(y)
+    { op{op_type::cosine, op{op_type::sum, placeholder::x, placeholder::y}}, op{op_type::difference, op{op_type::product, op{op_type::cosine, placeholder::x},
+                                                                                                                          op{op_type::cosine, placeholder::y}},
+                                                                                                     op{op_type::product, op{op_type::sine, placeholder::x},
+                                                                                                                          op{op_type::sine, placeholder::y}}} },
+    //      cos(x - y)  <=>  cos(x) * cos(y) + sin(x) * sin(y)
+    { op{op_type::cosine, op{op_type::difference, placeholder::x, placeholder::y}}, op{op_type::sum, op{op_type::product, op{op_type::cosine, placeholder::x},
+                                                                                                                          op{op_type::cosine, placeholder::y}},
+                                                                                                     op{op_type::product, op{op_type::sine, placeholder::x},
+                                                                                                                          op{op_type::sine, placeholder::y}}} },
 
     //      sin(2x)  <=>  2 * sin(x) * cos(x)
     //      cos(2x)  <=>  cos²(x) - sin²(x)
@@ -421,9 +421,11 @@ struct token
     char const* end;
 
     bool operator==(char const* str) const {
+        assert(begin != end);
         return strncmp(begin, str, end - begin) == 0;
     }
     bool operator!=(char const* str) const {
+        assert(begin != end);
         return strncmp(begin, str, end - begin) != 0;
     }
 
