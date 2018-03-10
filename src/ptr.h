@@ -1,61 +1,31 @@
 // ptr.h
 //
 
-//! Wrapper for deep-copyable pointer
+#include <memory>
+
+//! Wrapper for lazy shareable pointer
 template<typename T> class ptr
 {
 public:
+    //! default construction
     ptr()
         : _value(new T())
     {}
+    //! implicit construction from value
     ptr(T value)
         : _value(new T(value))
     {}
-    ptr(ptr<T> const& other)
-        : _value(other._value ? new T(*other._value) : nullptr)
-    {}
-    ptr(ptr<T>&& other)
-        : _value(other._value)
-    {
-        other._value = nullptr;
-    }
-    ~ptr() { delete _value; }
-
+    //! value assignment
     ptr<T>& operator=(T value)
     {
-        delete _value;
         _value = new T(value);
     }
-    ptr<T>& operator=(ptr<T> const& other)
-    {
-        delete _value;
-        _value = other._value ? new T(*other._value) : nullptr;
-        return *this;
-    }
-    ptr<T>& operator=(ptr<T>&& other)
-    {
-        delete _value;
-        _value = other._value;
-        other._value = nullptr;
-        return *this;
-    }
-    operator T&()
-    {
-        return *_value;
-    }
+    //! implicit cast to const value ref
     operator T const&() const
     {
-        return *_value;
-    }
-    bool operator==(ptr<T> const& other) const
-    {
-        return _value == other._value || (_value && other._value && *_value == *other._value);
-    }
-    bool operator!=(ptr<T> const& other) const
-    {
-        return !(this == other);
+        return *_value.get();
     }
 
 protected:
-    T* _value;
+    std::shared_ptr<T> _value;
 };
