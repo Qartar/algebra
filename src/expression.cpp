@@ -45,11 +45,19 @@ transform transforms[] = {
 
     // additive inverse
     //      x + (-x)  <=>  0
-    { op{op_type::difference, placeholder::x, placeholder::x}, constant::zero },
+    { op{op_type::sum, placeholder::x, op{op_type::negative, placeholder::x}}, constant::zero },
+    //      -x  <=>  0 - x
+    { op{op_type::negative, placeholder::x}, op{op_type::difference, constant::zero, placeholder::x} },
+    //      x + (-y)  <=>  x - y
+    { op{op_type::sum, placeholder::x, op{op_type::negative, placeholder::y}}, op{op_type::difference, placeholder::x, placeholder::y} },
 
     // multiplicative inverse
     //      x * (x^-1)  <=>  1
-    { op{op_type::quotient, placeholder::x, placeholder::x}, constant::one },
+    { op{op_type::product, placeholder::x, op{op_type::reciprocal, placeholder::x}}, constant::one },
+    //      1/x  <=>  1 / x
+    { op{op_type::reciprocal, placeholder::x}, op{op_type::quotient, constant::one, placeholder::x} },
+    //      x * (1/y)  <=>  x / y
+    { op{op_type::product, placeholder::x, op{op_type::reciprocal, placeholder::y}}, op{op_type::quotient, placeholder::x, placeholder::y} },
 
     // conversion between constants and from constant to value
     //      note: no conversions from transcendentals to values
@@ -108,7 +116,7 @@ transform transforms[] = {
 
     // fundamental property of i
     //      i²  <=>  -1
-    { op{op_type::product, constant::i, constant::i}, op{op_type::difference, constant::zero, constant::one} },
+    { op{op_type::product, constant::i, constant::i}, op{op_type::negative, constant::one} },
     // euler's formula
     //      e ^ (i * x) = cos(x) + i * sin(x)
     { op{op_type::exponent, constant::e, op{op_type::product, constant::i, placeholder::x}}, op{op_type::sum, op{op_type::cosine, placeholder::x},
@@ -139,11 +147,11 @@ transform transforms[] = {
     { constant::one, op{op_type::sum, op{op_type::exponent, op{op_type::sine, placeholder::x}, constant::two}, op{op_type::exponent, op{op_type::cosine, placeholder::x}, constant::two}} },
 
     //      sin(-x) = -sin(x)
-    { op{op_type::sine, op{op_type::difference, constant::zero, placeholder::x}}, op{op_type::difference, constant::zero, op{op_type::sine, placeholder::x}} },
+    { op{op_type::sine, op{op_type::negative, placeholder::x}}, op{op_type::negative, op{op_type::sine, placeholder::x}} },
     //      cos(-x) = cos(x)
-    { op{op_type::cosine, op{op_type::difference, constant::zero, placeholder::x}}, op{op_type::sine, placeholder::x} },
+    { op{op_type::cosine, op{op_type::negative, placeholder::x}}, op{op_type::sine, placeholder::x} },
     //      tan(-x) = -tan(x)
-    { op{op_type::tangent, op{op_type::difference, constant::zero, placeholder::x}}, op{op_type::difference, constant::zero, op{op_type::tangent, placeholder::x}} },
+    { op{op_type::tangent, op{op_type::negative, placeholder::x}}, op{op_type::negative, op{op_type::tangent, placeholder::x}} },
 
     //      sin(pi/2 - x)  <=>  cos(x)
     { op{op_type::sine, op{op_type::difference, constant::halfpi, placeholder::x}}, op{op_type::cosine, placeholder::x} },
@@ -155,16 +163,16 @@ transform transforms[] = {
     //      sin(pi - x)  <=>  sin(x)
     { op{op_type::sine, op{op_type::difference, constant::pi, placeholder::x}}, op{op_type::sine, placeholder::x} },
     //      cos(pi - x)  <=>  -cos(x)
-    { op{op_type::cosine, op{op_type::difference, constant::pi, placeholder::x}}, op{op_type::difference, constant::zero, op{op_type::cosine, placeholder::x}} },
+    { op{op_type::cosine, op{op_type::difference, constant::pi, placeholder::x}}, op{op_type::negative, op{op_type::cosine, placeholder::x}} },
     //      tan(pi - x)  <=>  -tan(x)
-    { op{op_type::tangent, op{op_type::difference, constant::pi, placeholder::x}}, op{op_type::difference, constant::zero, op{op_type::tangent, placeholder::x}} },
+    { op{op_type::tangent, op{op_type::difference, constant::pi, placeholder::x}}, op{op_type::negative, op{op_type::tangent, placeholder::x}} },
 
     //      sin(2pi - x)  <=>  sin(-x)
-    { op{op_type::sine, op{op_type::difference, constant::twopi, placeholder::x}}, op{op_type::sine, op{op_type::difference, constant::zero, placeholder::x}} },
+    { op{op_type::sine, op{op_type::difference, constant::twopi, placeholder::x}}, op{op_type::sine, op{op_type::negative, placeholder::x}} },
     //      cos(2pi - x)  <=>  cos(-x)
-    { op{op_type::cosine, op{op_type::difference, constant::twopi, placeholder::x}}, op{op_type::cosine, op{op_type::difference, constant::zero, placeholder::x}} },
+    { op{op_type::cosine, op{op_type::difference, constant::twopi, placeholder::x}}, op{op_type::cosine, op{op_type::negative, placeholder::x}} },
     //      tan(2pi - x)  <=>  tan(-x)
-    { op{op_type::tangent, op{op_type::difference, constant::twopi, placeholder::x}}, op{op_type::tangent, op{op_type::difference, constant::zero, placeholder::x}} },
+    { op{op_type::tangent, op{op_type::difference, constant::twopi, placeholder::x}}, op{op_type::tangent, op{op_type::negative, placeholder::x}} },
 
     //      sin(x + y)  <=>  sin(x) * cos(y) + cos(x) * sin(y)
     { op{op_type::sine, op{op_type::sum, placeholder::x, placeholder::y}}, op{op_type::sum, op{op_type::product, op{op_type::sine, placeholder::x},
@@ -214,8 +222,10 @@ std::string to_string(expression const& in)
         switch (in_op.type) {
             case op_type::sum: return std::string("(") + to_string(in_op.lhs) + " + " + to_string(in_op.rhs) + ")";
             case op_type::difference: return std::string("(") + to_string(in_op.lhs) + " - " + to_string(in_op.rhs) + ")";
+            case op_type::negative: return std::string("(-") + to_string(in_op.lhs) + ")";
             case op_type::product: return std::string("(") + to_string(in_op.lhs) + " * " + to_string(in_op.rhs) + ")";
             case op_type::quotient: return std::string("(") + to_string(in_op.lhs) + " / " + to_string(in_op.rhs) + ")";
+            case op_type::reciprocal: return std::string("(1/") + to_string(in_op.lhs) + ")";
             case op_type::exponent: return std::string("(") + to_string(in_op.lhs) + " ^ " + to_string(in_op.rhs) + ")";
             case op_type::logarithm: return std::string("log(") + to_string(in_op.lhs) + ", " + to_string(in_op.rhs) + ")";
             case op_type::sine: return std::string("sin(") + to_string(in_op.lhs) + ")";
@@ -516,6 +526,9 @@ std::set<expression, expression_cmp> enumerate_transforms(expression const& expr
 
         std::map<placeholder, expression> expr_placeholders;
 
+        assert(source_placeholders.size() == merged_placeholders.size()
+            || target_placeholders.size() == merged_placeholders.size());
+
         if (source_placeholders.size() == merged_placeholders.size()) {
             if (match(expr, tr.source, expr_placeholders) && match_placeholders(expr_placeholders, merged_placeholders)) {
                 auto expr_tr = apply_transform_r(expr, tr.target, expr_placeholders);
@@ -562,9 +575,16 @@ std::set<expression, expression_cmp> enumerate_transforms(expression const& expr
 
             switch (expr_op.type) {
                 case op_type::sum: out.insert(lhs + rhs); break;
-                case op_type::difference: out.insert(lhs - rhs); break;
+                case op_type::difference:
+                    if (lhs < rhs) {
+                        out.insert(op{op_type::reciprocal, rhs - lhs});
+                    } else {
+                        out.insert(lhs - rhs);
+                    }
+                    break;
                 case op_type::product: out.insert(lhs * rhs); break;
                 case op_type::quotient: out.insert(lhs / rhs); break;
+                case op_type::exponent: out.insert(std::pow(lhs, rhs)); break;
             }
         }
     }

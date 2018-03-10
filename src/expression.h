@@ -17,8 +17,10 @@ enum class op_type
 {
     sum,            //!< `lhs` + `rhs`
     difference,     //!< `lhs` - `rhs`
+    negative,       //!< 0 - `lhs`
     product,        //!< `lhs` * `rhs`
     quotient,       //!< `lhs` / `rhs`
+    reciprocal,     //!< 1 / `lhs`
     exponent,       //!< `lhs` raised to the power of `rhs`
     logarithm,      //!< logarithm of `lhs` using base `rhs`
     sine,           //!< sine of `lhs`

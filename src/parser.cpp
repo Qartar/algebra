@@ -14,6 +14,11 @@ struct token
     char const* begin;
     char const* end;
 
+    char operator[](std::size_t index) const {
+        assert(end - begin > std::ptrdiff_t(index));
+        return begin[index];
+    }
+
     bool operator==(char const* str) const {
         assert(begin != end);
         return strncmp(begin, str, end - begin) == 0;
@@ -197,7 +202,7 @@ result<expression> parse_unary_function(token const*& tokens, token const* end, 
 }
 
 //------------------------------------------------------------------------------
-result<expression> parse_operand(token const*& tokens, token const* end)
+result<expression> parse_operand_explicit(token const*& tokens, token const* end)
 {
     if (tokens >= end) {
         return error{*(tokens - 1), "expected expression after '" + *(tokens - 1) + "'"};
@@ -282,6 +287,52 @@ result<expression> parse_operand(token const*& tokens, token const* end)
 
     } else {
         return error{*tokens, "syntax error: '" + *tokens + "'"};
+    }
+}
+
+//------------------------------------------------------------------------------
+result<expression> parse_operand(token const*& tokens, token const* end)
+{
+    if (tokens >= end) {
+        return error{*(tokens - 1), "expected expression after '" + *(tokens - 1) + "'"};
+    } else if (*tokens == ')' || *tokens == ',') {
+        return error{*tokens, "expected expression after '" + *(tokens - 1) + "', found '" + *tokens + "'"};
+    }
+
+    expression out;
+    bool is_negative = false;
+
+    // check for negation
+    if (*tokens == '-') {
+        is_negative = true;
+        ++tokens;
+    }
+
+    result<expression> operand = parse_operand_explicit(tokens, end);
+    if (std::holds_alternative<error>(operand)) {
+        return std::get<error>(operand);
+    } else {
+        out = std::get<expression>(operand);
+    }
+
+    // check for implicit multiplication, e.g. `3x`
+    if (std::holds_alternative<value>(out) || std::holds_alternative<constant>(out)) {
+        token const* saved = tokens;
+
+        result<expression> next = parse_operand_explicit(tokens, end);
+        if (std::holds_alternative<error>(next)
+            || std::holds_alternative<value>(std::get<expression>(next))) {
+            tokens = saved;
+        } else {
+            out = op{op_type::product, out, std::get<expression>(next)};
+        }
+    }
+
+    // apply negation after implicit multiplication
+    if (is_negative) {
+        return op{op_type::negative, out};
+    } else {
+        return out;
     }
 }
 
