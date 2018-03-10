@@ -639,20 +639,30 @@ expression parse(char const* str)
 //------------------------------------------------------------------------------
 int compare(expression const& lhs, expression const& rhs)
 {
+    // compare expression types
     std::ptrdiff_t d = lhs.index() - rhs.index();
     if (d < 0) {
         return -1;
     } else if (d == 0) {
-        if (std::holds_alternative<op>(lhs) && std::holds_alternative<op>(rhs)) {
+        // empty ops are all equal
+        if (std::holds_alternative<empty>(lhs)) {
+            assert(std::holds_alternative<empty>(rhs));
+            return 0;
+        // compare operations recursively
+        } else if (std::holds_alternative<op>(lhs)) {
+            assert(std::holds_alternative<op>(rhs));
             op const& lhs_op = std::get<op>(lhs);
             op const& rhs_op = std::get<op>(rhs);
+            // compare operator by enum value
             if (lhs_op.type < rhs_op.type) {
                 return -1;
             } else if (lhs_op.type == rhs_op.type) {
+                // compare left operands
                 int d2 = compare(lhs_op.lhs, rhs_op.lhs);
                 if (d2 < 0) {
                     return -1;
                 } else if (d2 == 0) {
+                    // compare right operands
                     return compare(lhs_op.rhs, rhs_op.rhs);
                 } else {
                     return 1;
@@ -660,8 +670,30 @@ int compare(expression const& lhs, expression const& rhs)
             } else {
                 return 1;
             }
+        // compare constants by enum value
+        } else if (std::holds_alternative<constant>(lhs)) {
+            assert(std::holds_alternative<constant>(rhs));
+            return static_cast<int>(std::get<constant>(lhs)) - static_cast<int>(std::get<constant>(rhs));
+        // compare values by value
+        } else if (std::holds_alternative<value>(lhs)) {
+            assert(std::holds_alternative<value>(rhs));
+            double dv = std::get<value>(lhs) - std::get<value>(rhs);
+            if (dv < 0.0) {
+                return -1;
+            } else if (dv == 0.0) {
+                return 0;
+            } else {
+                return 1;
+            }
+        // compare symbols lexicographically
+        } else if (std::holds_alternative<symbol>(lhs)) {
+            assert(std::holds_alternative<symbol>(rhs));
+            return std::get<symbol>(lhs).compare(std::get<symbol>(rhs));
+        // compare placeholders by enum value
+        } else if (std::holds_alternative<placeholder>(lhs)) {
+            assert(std::holds_alternative<placeholder>(rhs));
+            return static_cast<int>(std::get<placeholder>(lhs)) - static_cast<int>(std::get<placeholder>(rhs));
         } else {
-            // FIXME!
             assert(0);
             return 0;
         }
@@ -675,16 +707,7 @@ struct expression_cmp
 {
     bool operator()(expression const& lhs, expression const& rhs) const
     {
-        return std::less<std::string>()(to_string(lhs), to_string(rhs));
-    }
-};
-
-//------------------------------------------------------------------------------
-struct expression_hash
-{
-    std::size_t operator()(expression const& expr) const
-    {
-        return std::hash<std::string>()(to_string(expr));
+        return compare(lhs, rhs) < 0;
     }
 };
 
