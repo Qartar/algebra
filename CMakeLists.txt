@@ -1,5 +1,21 @@
 cmake_minimum_required(VERSION 3.9)
 
-project(expression)
-add_executable(expression expression.cpp expression.h)
-target_compile_features(expression PRIVATE cxx_std_17)
+project(algebra)
+
+add_library(algebra
+    src/expression.cpp
+    src/expression.h
+    src/ptr.h
+)
+
+target_compile_features(algebra PUBLIC cxx_std_17)
+target_include_directories(algebra
+    PUBLIC
+        ${CMAKE_SOURCE_DIR}/src
+)
+
+add_executable(simplify
+    test/simplify.cpp
+)
+
+target_link_libraries(simplify PRIVATE algebra)

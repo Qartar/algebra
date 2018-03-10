@@ -3,15 +3,12 @@
 
 #include "expression.h"
 
-#include <algorithm>
 #include <cassert>
 #include <map>
 #include <queue>
 #include <set>
-#include <vector>
 
-#include <cstdio>
-#include <iostream>
+namespace algebra {
 
 transform transforms[] = {
     // associativity of addition
@@ -777,7 +774,7 @@ void traceback(expression const& expr, std::map<expression, expression, expressi
 }
 
 //------------------------------------------------------------------------------
-expression simplify(expression const& expr, std::size_t max_operations = SIZE_MAX, std::size_t max_iterations = SIZE_MAX)
+expression simplify(expression const& expr, std::size_t max_operations, std::size_t max_iterations)
 {
     std::set<expression, expression_cmp> closed;
     std::priority_queue<expression, std::vector<expression>, expression_queue_cmp> queue;
@@ -823,28 +820,4 @@ expression simplify(expression const& expr, std::size_t max_operations = SIZE_MA
     return best;
 }
 
-//------------------------------------------------------------------------------
-void foo(char const* str)
-{
-    simplify(parse(str));
-}
-
-//------------------------------------------------------------------------------
-void bar()
-{
-    while (true) {
-        std::string line; std::getline(std::cin, line);
-        if (line == "") {
-            break;
-        }
-
-        simplify(parse(line.c_str()), 32, 256);
-    }
-}
-
-//------------------------------------------------------------------------------
-int main()
-{
-    bar();
-    return 0;
-}
+} // namespace algebra

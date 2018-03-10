@@ -8,6 +8,8 @@
 
 #include "ptr.h"
 
+namespace algebra {
+
 //------------------------------------------------------------------------------
 //! operations and functions
 enum class op_type
@@ -95,3 +97,9 @@ struct transform
     expression source;
     expression target;
 };
+
+//------------------------------------------------------------------------------
+expression parse(char const* str);
+expression simplify(expression const& expr, std::size_t max_operations = SIZE_MAX, std::size_t max_iterations = SIZE_MAX);
+
+} // namespace algebra
