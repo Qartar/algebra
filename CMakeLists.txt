@@ -5,6 +5,8 @@ project(algebra)
 add_library(algebra
     src/expression.cpp
     src/expression.h
+    src/parser.cpp
+    src/parser.h
     src/ptr.h
 )
 

@@ -1,12 +1,13 @@
 // expression.h
 //
 
+#pragma once
+#include "ptr.h"
+
 #include <cstdint>
 #include <functional>
 #include <string>
 #include <variant>
-
-#include "ptr.h"
 
 namespace algebra {
 
@@ -99,7 +100,6 @@ struct transform
 };
 
 //------------------------------------------------------------------------------
-expression parse(char const* str);
 expression simplify(expression const& expr, std::size_t max_operations = SIZE_MAX, std::size_t max_iterations = SIZE_MAX);
 
 } // namespace algebra

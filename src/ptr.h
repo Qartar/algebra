@@ -1,6 +1,7 @@
 // ptr.h
 //
 
+#pragma once
 #include <memory>
 
 //! Wrapper for lazy shareable pointer
