@@ -764,13 +764,26 @@ std::set<expression, expression_cmp> enumerate_transforms(expression const& expr
     // transform subexpressions
     if (std::holds_alternative<op>(expr)) {
         op const& expr_op = std::get<op>(expr);
-        auto lhs = enumerate_transforms(expr_op.lhs);
-        for (auto const& lhs_tr : lhs) {
-            out.insert(op{expr_op.type, lhs_tr, expr_op.rhs});
+        auto lhs_tr = enumerate_transforms(expr_op.lhs);
+        for (auto const& tr : lhs_tr) {
+            out.insert(op{expr_op.type, tr, expr_op.rhs});
         }
-        auto rhs = enumerate_transforms(expr_op.rhs);
-        for (auto const& rhs_tr : rhs) {
-            out.insert(op{expr_op.type, expr_op.lhs, rhs_tr});
+        auto rhs_tr = enumerate_transforms(expr_op.rhs);
+        for (auto const& tr : rhs_tr) {
+            out.insert(op{expr_op.type, expr_op.lhs, tr});
+        }
+
+        // simplify algebraic value expressions
+        if (std::holds_alternative<value>((expression const&)expr_op.lhs) && std::holds_alternative<value>((expression const&)expr_op.rhs)) {
+            value lhs = std::get<value>((expression const&)expr_op.lhs);
+            value rhs = std::get<value>((expression const&)expr_op.rhs);
+
+            switch (expr_op.type) {
+                case op_type::sum: out.insert(lhs + rhs); break;
+                case op_type::difference: out.insert(lhs - rhs); break;
+                case op_type::product: out.insert(lhs * rhs); break;
+                case op_type::quotient: out.insert(lhs / rhs); break;
+            }
         }
     }
 
