@@ -16,7 +16,7 @@ transform transforms[] = {
     { op{op_type::sum, op{op_type::sum, placeholder::x, placeholder::y}, placeholder::z}, op{op_type::sum, placeholder::x, op{op_type::sum, placeholder::y, placeholder::z}} },
 
     // associativity of multiplication
-    //      (x + y) + z  <=>  x + (y + z)
+    //      (x * y) * z  <=>  x * (y * z)
     { op{op_type::product, op{op_type::product, placeholder::x, placeholder::y}, placeholder::z}, op{op_type::product, placeholder::x, op{op_type::product, placeholder::y, placeholder::z}} },
 
     // commutativity of addition
