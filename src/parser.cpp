@@ -73,6 +73,7 @@ result<tokenized> tokenize(char const* str)
 
         token t{str, str};
         switch (*str) {
+            case '=':
             case '+':
             case '-':
             case '*':
@@ -131,7 +132,10 @@ result<op_type> parse_operator(token const*& tokens, token const* end)
         return error{*tokens, "expected operator after '" + *(tokens - 1) + "', found '" + *tokens + "'"};
     }
 
-    if (tokens[0] == '+') {
+    if (tokens[0] == '=') {
+        ++tokens;
+        return op_type::equality;
+    } else if (tokens[0] == '+') {
         ++tokens;
         return op_type::sum;
     } else if (tokens[0] == '-') {
@@ -248,15 +252,6 @@ result<expression> parse_operand_explicit(token const*& tokens, token const* end
     //  constants
     //
 
-    } else if (*tokens == '0') {
-        ++tokens;
-        return constant::zero;
-    } else if (tokens[0] == '1') {
-        ++tokens;
-        return constant::one;
-    } else if (tokens[0] == '2') {
-        ++tokens;
-        return constant::two;
     } else if (tokens[0] == "pi") {
         ++tokens;
         return constant::pi;
@@ -303,6 +298,7 @@ result<expression> parse_operand_explicit(token const*& tokens, token const* end
 constexpr int op_precedence(op_type t)
 {
     switch (t) {
+        case op_type::equality: return 16;
         case op_type::sum: return 6;
         case op_type::difference: return 6;
         case op_type::product: return 5;

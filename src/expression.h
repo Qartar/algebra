@@ -15,6 +15,7 @@ namespace algebra {
 //! operations and functions
 enum class op_type
 {
+    equality,       //!< `lhs` = `rhs`
     sum,            //!< `lhs` + `rhs`
     difference,     //!< `lhs` - `rhs`
     negative,       //!< 0 - `lhs`
@@ -47,12 +48,7 @@ class expression;
 enum class constant
 {
     undefined,  //!< e.g. divide by zero
-    zero,       //!< additive identity
-    one,        //!< multiplicative identity
-    two,        //!<
     pi,         //!<
-    twopi,      //!<
-    halfpi,     //!<
     e,          //!< natural base
     i,          //!< imaginary unit
 };

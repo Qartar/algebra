@@ -2,6 +2,7 @@
 //
 
 #include "expression.h"
+#include "parser.h"
 
 #include <cassert>
 #include <map>
@@ -10,258 +11,159 @@
 
 namespace algebra {
 
-transform transforms[] = {
+char const* transform_strings[] = {
     // associativity of addition
-    //      (x + y) + z  <=>  x + (y + z)
-    { op{op_type::sum, op{op_type::sum, placeholder::x, placeholder::y}, placeholder::z}, op{op_type::sum, placeholder::x, op{op_type::sum, placeholder::y, placeholder::z}} },
+    "(x + y) + z = x + (y + z)",
 
     // associativity of multiplication
-    //      (x * y) * z  <=>  x * (y * z)
-    { op{op_type::product, op{op_type::product, placeholder::x, placeholder::y}, placeholder::z}, op{op_type::product, placeholder::x, op{op_type::product, placeholder::y, placeholder::z}} },
+    "(x * y) * z = x * (y * z)",
 
     // commutativity of addition
-    //      x + y  <=>  y + x
-    { op{op_type::sum, placeholder::x, placeholder::y}, op{op_type::sum, placeholder::y, placeholder::x} },
+    "x + y = y + x",
 
     // commutativity of multiplication
-    //      x * y  <=>  y * x
-    { op{op_type::product, placeholder::x, placeholder::y},  op{op_type::product, placeholder::y, placeholder::x} },
+    "x * y = y * x",
 
     // distributivity of multiplication over addition
-    //      a * (x + y)  <=>  a * x + a * y
-    { op{op_type::product, placeholder::a, op{op_type::sum, placeholder::x, placeholder::y}}, op{op_type::sum, op{op_type::product, placeholder::a, placeholder::x}, op{op_type::product, placeholder::a, placeholder::y}} },
+    "a * (x + y) = a * x + a * y",
 
     // additive identity
-    //      x + 0  <=>  x
-    { op{op_type::sum, placeholder::x, constant::zero}, placeholder::x },
+    "x + 0 = x",
 
     // multiplicative identity
-    //      x * 1  <=>  x
-    { op{op_type::product, placeholder::x, constant::one}, placeholder::x },
+    "x * 1 = x",
 
     // multiplicative kernel
-    //      x * 0  <=>  0
-    { op{op_type::product, placeholder::x, constant::zero}, constant::zero },
+    "x * 0 = 0",
 
     // additive inverse
-    //      x + (-x)  <=>  0
-    { op{op_type::sum, placeholder::x, op{op_type::negative, placeholder::x}}, constant::zero },
-    //      -x  <=>  0 - x
-    { op{op_type::negative, placeholder::x}, op{op_type::difference, constant::zero, placeholder::x} },
-    //      x + (-y)  <=>  x - y
-    { op{op_type::sum, placeholder::x, op{op_type::negative, placeholder::y}}, op{op_type::difference, placeholder::x, placeholder::y} },
+    "x + (-x) = 0",
+    "-x = 0 - x",
+    "x + (-y) = x - y",
 
     // multiplicative inverse
-    //      x * (x^-1)  <=>  1
-    { op{op_type::product, placeholder::x, op{op_type::reciprocal, placeholder::x}}, constant::one },
-    //      1/x  <=>  1 / x
-    { op{op_type::reciprocal, placeholder::x}, op{op_type::quotient, constant::one, placeholder::x} },
-    //      x * (1/y)  <=>  x / y
-    { op{op_type::product, placeholder::x, op{op_type::reciprocal, placeholder::y}}, op{op_type::quotient, placeholder::x, placeholder::y} },
+    "x * (x^-1) = 1",
+    "1/x = 1 / x",
+    "x * (1/y) = x / y",
 
-    // conversion between constants and from constant to value
-    //      note: no conversions from transcendentals to values
-    { constant::zero, value{0.0} },
-    { constant::one, value{1.0} },
-    { constant::two, value{2.0} },
-    { constant::two, op{op_type::sum, constant::one, constant::one} },
-    { constant::twopi, op{op_type::product, constant::two, constant::pi} },
-    { constant::halfpi, op{op_type::quotient, constant::pi, constant::two} },
-
-    //      x + x  <=>  x * 2
-    { op{op_type::sum, placeholder::x, placeholder::x}, op{op_type::product, placeholder::x, constant::two} },
-    //      x * x  <=>  x ^ 2
-    { op{op_type::product, placeholder::x, placeholder::x}, op{op_type::exponent, placeholder::x, constant::two} },
-
+    "x + x = x * 2",
+    "x * x = x ^ 2",
 
     //
     //  exponentiation and logarithms
     //
 
-    //      log(x * y, b)  <=>  log(x, b) + log(y, b)
-    { op{op_type::logarithm, op{op_type::product, placeholder::x, placeholder::y}}, op{op_type::sum, op{op_type::logarithm, placeholder::x, placeholder::b}, op{op_type::logarithm, placeholder::y, placeholder::b}} },
+    "log(x * y, b) = log(x, b) + log(y, b)",
 
     // change of base
-    //      log(x, b)  <=>  log(x, y) / log(b, y)
-    { op{op_type::logarithm, placeholder::x, placeholder::b}, op{op_type::quotient, op{op_type::logarithm, placeholder::x, placeholder::y},
-                                                                                    op{op_type::logarithm, placeholder::b, placeholder::y}} },
+    "log(x, b) = log(x, y) / log(b, y)",
 
-    //      b ^ log(x, b)  <=>  x
-    { op{op_type::exponent, placeholder::b, op{op_type::logarithm, placeholder::x, placeholder::b}}, placeholder::x },
+    "b ^ log(x, b) = x",
 
     // exponentiation identity
-    //      b ^ x * b ^ y  <=>  b ^ (x + y)
-    { op{op_type::product, op{op_type::exponent, placeholder::b, placeholder::x}, op{op_type::exponent, placeholder::b, placeholder::y}}, op{op_type::exponent, placeholder::b, op{op_type::sum, placeholder::x, placeholder::y}} },
+    "b ^ x * b ^ y = b ^ (x + y)",
 
-    //      (b ^ x) ^ y  <=>  b ^ (x * y)
-    { op{op_type::exponent, op{op_type::exponent, placeholder::b, placeholder::x}, placeholder::y}, op{op_type::exponent, placeholder::b, op{op_type::product, placeholder::x, placeholder::y}} },
+    "(b ^ x) ^ y = b ^ (x * y)",
 
     // distributivity over multiplication
-    //      (x * y) ^ n  <=>  (x ^ n) * (y ^ n)
-    { op{op_type::exponent, op{op_type::product, placeholder::x, placeholder::y}, placeholder::n}, op{op_type::product, op{op_type::exponent, placeholder::x, placeholder::n},
-                                                                                                                        op{op_type::exponent, placeholder::y, placeholder::n}} },
+    "(x * y) ^ n = (x ^ n) * (y ^ n)",
 
-    //      x ^ 0  <=>  1
-    { op{op_type::exponent, placeholder::x, constant::zero}, constant::one },
+    "x ^ 0 = 1",
 
-    //      x ^ 1  <=>  x
-    { op{op_type::exponent, placeholder::x, constant::one}, placeholder::x },
+    "x ^ 1 = x",
 
-    //      log(1, x)  <=>  0
-    { op{op_type::logarithm, constant::one, placeholder::x}, constant::zero },
+    "log(1, x) = 0",
 
     //
     //  complex numbers
     //
 
     // fundamental property of i
-    //      i²  <=>  -1
-    { op{op_type::product, constant::i, constant::i}, op{op_type::negative, constant::one} },
+    "i ^ 2 = -1",
     // euler's formula
-    //      e ^ (i * x) = cos(x) + i * sin(x)
-    { op{op_type::exponent, constant::e, op{op_type::product, constant::i, placeholder::x}}, op{op_type::sum, op{op_type::cosine, placeholder::x},
-                                                                                                              op{op_type::product, constant::i, op{op_type::sine, placeholder::x}}} },
+    "e ^ (i * x) = cos(x) + i * sin(x)",
 
     //
     //  trigonometry
     //
 
-    //      sin(0)  <=>  0
-    { op{op_type::sine, constant::zero}, constant::zero },
-    //      cos(0)  <=>  1
-    { op{op_type::cosine, constant::zero}, constant::one },
-    //      sin(pi/2)  <=>  1
-    { op{op_type::sine, constant::halfpi}, constant::one },
-    //      cos(pi/2)  <=>  0
-    { op{op_type::cosine, constant::halfpi}, constant::zero },
+    "sin(0) = 0",
+    "cos(0) = 1",
+    "sin(pi/2) = 1",
+    "cos(pi/2) = 0",
 
-    //      tan(x)  <=>  sin(x) / cos(x)
-    { op{op_type::tangent, placeholder::x}, op{op_type::quotient, op{op_type::sine, placeholder::x}, op{op_type::cosine, placeholder::x}} },
-    //      sec(x)  <=>  1 / cos(x)
-    { op{op_type::secant, placeholder::x}, op{op_type::quotient, constant::one, op{op_type::cosine, placeholder::x}} },
-    //      csc(x)  <=>  1 / sin(x)
-    { op{op_type::cosecant, placeholder::x}, op{op_type::quotient, constant::one, op{op_type::sine, placeholder::x}} },
-    //      cot(x)  <=>  1 / tan(x)
-    { op{op_type::cotangent, placeholder::x}, op{op_type::quotient, constant::one, op{op_type::tangent, placeholder::x}} },
-    //      1  <=>  sin²(x) + cos²(x)
-    { constant::one, op{op_type::sum, op{op_type::exponent, op{op_type::sine, placeholder::x}, constant::two}, op{op_type::exponent, op{op_type::cosine, placeholder::x}, constant::two}} },
+    "tan(x) = sin(x) / cos(x)",
+    "sec(x) = 1 / cos(x)",
+    "csc(x) = 1 / sin(x)",
+    "cot(x) = 1 / tan(x)",
+    "1 = sin(x) ^ 2 + cos(x) ^ 2",
 
-    //      sin(-x) = -sin(x)
-    { op{op_type::sine, op{op_type::negative, placeholder::x}}, op{op_type::negative, op{op_type::sine, placeholder::x}} },
-    //      cos(-x) = cos(x)
-    { op{op_type::cosine, op{op_type::negative, placeholder::x}}, op{op_type::sine, placeholder::x} },
-    //      tan(-x) = -tan(x)
-    { op{op_type::tangent, op{op_type::negative, placeholder::x}}, op{op_type::negative, op{op_type::tangent, placeholder::x}} },
+    "sin(-x) = -sin(x)",
+    "cos(-x) = cos(x)",
+    "tan(-x) = -tan(x)",
 
-    //      sin(pi/2 - x)  <=>  cos(x)
-    { op{op_type::sine, op{op_type::difference, constant::halfpi, placeholder::x}}, op{op_type::cosine, placeholder::x} },
-    //      cos(pi/2 - x)  <=>  sin(x)
-    { op{op_type::cosine, op{op_type::difference, constant::halfpi, placeholder::x}}, op{op_type::cosine, placeholder::x} },
-    //      tan(pi/2 - x)  <=>  cot(x)
-    { op{op_type::tangent, op{op_type::difference, constant::halfpi, placeholder::x}}, op{op_type::cotangent, placeholder::x} },
+    "sin(pi/2 - x) = cos(x)",
+    "cos(pi/2 - x) = sin(x)",
+    "tan(pi/2 - x) = cot(x)",
 
-    //      sin(pi - x)  <=>  sin(x)
-    { op{op_type::sine, op{op_type::difference, constant::pi, placeholder::x}}, op{op_type::sine, placeholder::x} },
-    //      cos(pi - x)  <=>  -cos(x)
-    { op{op_type::cosine, op{op_type::difference, constant::pi, placeholder::x}}, op{op_type::negative, op{op_type::cosine, placeholder::x}} },
-    //      tan(pi - x)  <=>  -tan(x)
-    { op{op_type::tangent, op{op_type::difference, constant::pi, placeholder::x}}, op{op_type::negative, op{op_type::tangent, placeholder::x}} },
+    "sin(pi - x) = sin(x)",
+    "cos(pi - x) = -cos(x)",
+    "tan(pi - x) = -tan(x)",
 
-    //      sin(2pi - x)  <=>  sin(-x)
-    { op{op_type::sine, op{op_type::difference, constant::twopi, placeholder::x}}, op{op_type::sine, op{op_type::negative, placeholder::x}} },
-    //      cos(2pi - x)  <=>  cos(-x)
-    { op{op_type::cosine, op{op_type::difference, constant::twopi, placeholder::x}}, op{op_type::cosine, op{op_type::negative, placeholder::x}} },
-    //      tan(2pi - x)  <=>  tan(-x)
-    { op{op_type::tangent, op{op_type::difference, constant::twopi, placeholder::x}}, op{op_type::tangent, op{op_type::negative, placeholder::x}} },
+    "sin(2pi - x) = sin(-x)",
+    "cos(2pi - x) = cos(-x)",
+    "tan(2pi - x) = tan(-x)",
 
-    //      sin(x + y)  <=>  sin(x) * cos(y) + cos(x) * sin(y)
-    { op{op_type::sine, op{op_type::sum, placeholder::x, placeholder::y}}, op{op_type::sum, op{op_type::product, op{op_type::sine, placeholder::x},
-                                                                                                                 op{op_type::cosine, placeholder::y}},
-                                                                                            op{op_type::product, op{op_type::cosine, placeholder::x},
-                                                                                                                 op{op_type::sine, placeholder::y}}} },
-    //      sin(x - y)  <=>  sin(x) * cos(y) - cos(x) * sin(y)
-    { op{op_type::sine, op{op_type::difference, placeholder::x, placeholder::y}}, op{op_type::difference, op{op_type::product, op{op_type::sine, placeholder::x},
-                                                                                                                               op{op_type::cosine, placeholder::y}},
-                                                                                                          op{op_type::product, op{op_type::cosine, placeholder::x},
-                                                                                                                               op{op_type::sine, placeholder::y}}} },
+    "sin(x + y) = sin(x) * cos(y) + cos(x) * sin(y)",
 
-    //      cos(x + y)  <=>  cos(x) * cos(y) - sin(x) * sin(y)
-    { op{op_type::cosine, op{op_type::sum, placeholder::x, placeholder::y}}, op{op_type::difference, op{op_type::product, op{op_type::cosine, placeholder::x},
-                                                                                                                          op{op_type::cosine, placeholder::y}},
-                                                                                                     op{op_type::product, op{op_type::sine, placeholder::x},
-                                                                                                                          op{op_type::sine, placeholder::y}}} },
-    //      cos(x - y)  <=>  cos(x) * cos(y) + sin(x) * sin(y)
-    { op{op_type::cosine, op{op_type::difference, placeholder::x, placeholder::y}}, op{op_type::sum, op{op_type::product, op{op_type::cosine, placeholder::x},
-                                                                                                                          op{op_type::cosine, placeholder::y}},
-                                                                                                     op{op_type::product, op{op_type::sine, placeholder::x},
-                                                                                                                          op{op_type::sine, placeholder::y}}} },
+    "sin(x - y) = sin(x) * cos(y) - cos(x) * sin(y)",
 
-    //      sin(2pi + x)  <=>  sin(x)
-    { op{op_type::sine, op{op_type::sum, constant::twopi, placeholder::x}}, op{op_type::sine, placeholder::x} },
-    //      cos(2pi + x)  <=>  cos(x)
-    { op{op_type::cosine, op{op_type::sum, constant::twopi, placeholder::x}}, op{op_type::cosine, placeholder::x} },
-    //      tan(2pi + x)  <=>  tan(x)
-    { op{op_type::tangent, op{op_type::sum, constant::twopi, placeholder::x}}, op{op_type::tangent, placeholder::x} },
+    "cos(x + y) = cos(x) * cos(y) - sin(x) * sin(y)",
+    "cos(x - y) = cos(x) * cos(y) + sin(x) * sin(y)",
 
-    //      sin(2x)  <=>  2 * sin(x) * cos(x)
-    { op{op_type::sine, op{op_type::product, constant::two, placeholder::x}}, op{op_type::product, constant::two,
-                                                                                                   op{op_type::product, op{op_type::sine, placeholder::x},
-                                                                                                                        op{op_type::cosine, placeholder::x}}} },
-    //      cos(2x)  <=>  cos²(x) - sin²(x)
-    //      cos(2x)  <=>  2 * cos²(x) - 1
-    { op{op_type::cosine, op{op_type::product, constant::two, placeholder::x}}, op{op_type::difference, op{op_type::product, constant::two,
-                                                                                                                             op{op_type::exponent, op{op_type::cosine, placeholder::x}, constant::two}},
-                                                                                                        constant::one} },
+    "sin(2pi + x) = sin(x)",
+    "cos(2pi + x) = cos(x)",
+    "tan(2pi + x) = tan(x)",
 
-    //      sin(3x)  <=>  3 * sin(x) - 4 * sin³(x)
-    //      cos(3x)  <=>  4 * cos³(x) - 3 * cos(x)
+    "sin(2x) = 2 * sin(x) * cos(x)",
+    "cos(2x) = cos(x) ^ 2 - sin(x) ^ 2",
+    "cos(2x) = 2 * cos(x) ^ 2 - 1",
 
-    //      sin²(x)  <=>  (1 - cos(2x)) / 2
-    //      cos²(x)  <=>  (1 + cos(2x)) / 2
+    "sin(3x) = 3 * sin(x) - 4 * sin(x) ^ 3",
+    "cos(3x) = 4 * cos(x) ^ 3 - 3 * cos(x)",
+
+    "sin(x) ^ 2 = (1 - cos(2x)) / 2",
+    "cos(x) ^ 2 = (1 + cos(2x)) / 2",
 
     //
     //  differentiation
     //
 
-    //      d/dx(f + g)  <=>  d/dx(f) + d/dx(g)
-    { op{op_type::derivative, op{op_type::sum, placeholder::f, placeholder::g}, placeholder::x}, op{op_type::sum, op{op_type::derivative, placeholder::f, placeholder::x},
-                                                                                                                  op{op_type::derivative, placeholder::g, placeholder::x}} },
-    //      d/dx(f - g)  <=>  d/dx(f) - d/dx(g)
-    { op{op_type::derivative, op{op_type::difference, placeholder::f, placeholder::g}, placeholder::x}, op{op_type::difference, op{op_type::derivative, placeholder::f, placeholder::x},
-                                                                                                                                op{op_type::derivative, placeholder::g, placeholder::x}} },
+    "d/dx(f + g) = d/dx(f) + d/dx(g)",
+    "d/dx(f - g) = d/dx(f) - d/dx(g)",
 
     // product rule
-    //      d/dx(f * g)  <=>  d/dx(f) * g + f * d/dx(g)
-    { op{op_type::derivative, op{op_type::product, placeholder::f, placeholder::g}, placeholder::x}, op{op_type::sum, op{op_type::product, op{op_type::derivative, placeholder::f, placeholder::x}, placeholder::g},
-                                                                                                                      op{op_type::product, placeholder::f, op{op_type::derivative, placeholder::g, placeholder::x}}} },
+    "d/dx(f * g) = d/dx(f) * g + f * d/dx(g)",
 
     // quotient rule
-    //      d/dx(f / g)  <=>  (d/dx(f) * g - f * d/dx(g)) / g^2
-    { op{op_type::derivative, op{op_type::quotient, placeholder::f, placeholder::g}, placeholder::x}, op{op_type::quotient, op{op_type::difference, op{op_type::product, op{op_type::derivative, placeholder::f, placeholder::x}, placeholder::g},
-                                                                                                                                                    op{op_type::product, placeholder::f, op{op_type::derivative, placeholder::g, placeholder::x}}},
-                                                                                                                            op{op_type::exponent, placeholder::g, constant::two}} },
+    "d/dx(f / g) = (d/dx(f) * g - f * d/dx(g)) / g^2",
 
     // chain rule
-    //  d/dx(f(g))  <=>  d/dx(f)(g) * d/dx(g)
+    //"d/dx(f(g)) = d/dx(f)(g) * d/dx(g)",
 
     // power rule
-    //      d/dx(x ^ r)  <=>  r * x ^ (r - 1)       (r != 0)
-    { op{op_type::derivative, op{op_type::exponent, placeholder::x, placeholder::r}, placeholder::x}, op{op_type::product, placeholder::r, op{op_type::exponent, placeholder::x, op{op_type::difference, placeholder::r, constant::one}}} },
+    "d/dx(x ^ r) = r * x ^ (r - 1)", // (r != 0),
 
-    // d/dx(sin(x))  <=>  cos(x)
-    //{ op{op_type::derivative, op{op_type::sine, placeholder::x}, placeholder::x}, op{op_type::cosine, placeholder::x} },
-    // d/dx(cos(x))  <=>  -sin(x)
-    //{ op{op_type::derivative, op{op_type::cosine, placeholder::x}, placeholder::x}, op{op_type::negative, op{op_type::sine, placeholder::x}} },
-    // d/dx(tan(x))  <=>  sec²(x)
-    //{ op{op_type::derivative, op{op_type::tangent, placeholder::x}, placeholder::x}, op{op_type::exponent, op{op_type::secant, placeholder::x}, constant::two} },
+    "d/dx(sin(x)) = cos(x)",
+    "d/dx(cos(x)) = -sin(x)",
+    "d/dx(tan(x)) = sec(x) ^ 2",
 
-    // d/dx(sin(f))  <=>  d/dx(f) * cos(f)
-    { op{op_type::derivative, op{op_type::sine, placeholder::f}, placeholder::x}, op{op_type::product, op{op_type::derivative, placeholder::f, placeholder::x}, op{op_type::cosine, placeholder::f}} },
-    // d/dx(cos(f))  <=>  d/dx(f) * -sin(f)
-    { op{op_type::derivative, op{op_type::cosine, placeholder::f}, placeholder::x}, op{op_type::product, op{op_type::derivative, placeholder::f, placeholder::x}, op{op_type::negative, op{op_type::sine, placeholder::f}}} },
-    // d/dx(tan(f))  <=>  d/dx(f) * sec²(f)
-    { op{op_type::derivative, op{op_type::tangent, placeholder::f}, placeholder::x}, op{op_type::product, op{op_type::derivative, placeholder::f, placeholder::x}, op{op_type::exponent, op{op_type::secant, placeholder::f}, constant::two}} },
+    "d/dx(sin(f)) = d/dx(f) * cos(f)",
+    "d/dx(cos(f)) = d/dx(f) * -sin(f)",
+    "d/dx(tan(f)) = d/dx(f) * sec(f) ^ 2",
 };
+
+std::vector<transform> transforms;
 
 //------------------------------------------------------------------------------
 std::string to_string(expression const& in)
@@ -269,6 +171,7 @@ std::string to_string(expression const& in)
     if (std::holds_alternative<op>(in)) {
         op const& in_op = std::get<op>(in);
         switch (in_op.type) {
+            case op_type::equality: return to_string(in_op.lhs) + " = " + to_string(in_op.rhs);
             case op_type::sum: return std::string("(") + to_string(in_op.lhs) + " + " + to_string(in_op.rhs) + ")";
             case op_type::difference: return std::string("(") + to_string(in_op.lhs) + " - " + to_string(in_op.rhs) + ")";
             case op_type::negative: return std::string("(-") + to_string(in_op.lhs) + ")";
@@ -287,17 +190,14 @@ std::string to_string(expression const& in)
             default: assert(0); return "";
         }
     } else if (std::holds_alternative<value>(in)) {
-        return std::to_string(std::get<value>(in));
+        char buf[256];
+        std::snprintf(buf, 256, "%g", std::get<value>(in));
+        return buf;
     } else if (std::holds_alternative<constant>(in)) {
         constant const& in_const = std::get<constant>(in);
         switch (in_const) {
             case constant::undefined: return "N/A";
-            case constant::zero: return "0";
-            case constant::one: return "1";
-            case constant::two: return "2";
             case constant::pi: return "pi";
-            case constant::twopi: return "2pi";
-            case constant::halfpi: return "pi/2";
             case constant::e: return "e";
             case constant::i: return "i";
             default: assert(0); return "";
@@ -465,20 +365,6 @@ expression apply_transform_r(
 }
 
 //------------------------------------------------------------------------------
-expression do_transform(expression const& in)
-{
-    for (auto const& tr : transforms) {
-        std::map<placeholder, expression> placeholders;
-        if (match(in, tr.source, placeholders)) {
-            return apply_transform_r(in, tr.target, placeholders);
-        } else if (match(in, tr.target, placeholders)) {
-            return apply_transform_r(in, tr.source, placeholders);
-        }
-    }
-    return in;
-}
-
-//------------------------------------------------------------------------------
 int compare(expression const& lhs, expression const& rhs)
 {
     // compare expression types
@@ -554,11 +440,49 @@ struct expression_cmp
 };
 
 //------------------------------------------------------------------------------
+// convert symbols into placeholders so they can be used for substitution
+expression convert_placeholders(expression const& expr)
+{
+    if (std::holds_alternative<op>(expr)) {
+        op const& expr_op = std::get<op>(expr);
+        return op{expr_op.type, convert_placeholders(expr_op.lhs), convert_placeholders(expr_op.rhs)};
+    } else if (std::holds_alternative<symbol>(expr)) {
+        symbol s = std::get<symbol>(expr);
+        assert(s.length() == 1 && s[0] >= 'a' && s[0] <= 'z');
+        return static_cast<placeholder>(static_cast<int>(placeholder::x) + (s[0] - 'a'));
+    } else {
+        return expr;
+    }
+}
+
+//------------------------------------------------------------------------------
+bool resolve_transforms()
+{
+    if (transforms.size()) {
+        return true;
+    }
+
+    for (char const* str : transform_strings) {
+        expression expr = parse(str);
+
+        assert(std::holds_alternative<op>(expr));
+        assert(std::get<op>(expr).type == op_type::equality);
+
+        op const& expr_op = std::get<op>(expr);
+        transforms.push_back({convert_placeholders(expr_op.lhs), convert_placeholders(expr_op.rhs)});
+    }
+
+    return true;
+}
+
+//------------------------------------------------------------------------------
 std::set<expression, expression_cmp> enumerate_transforms(expression const& expr)
 {
     static std::map<expression, std::set<expression, expression_cmp>, expression_cmp> cached;
 
     std::set<expression, expression_cmp> out;
+
+    resolve_transforms();
 
     {
         auto it = cached.find(expr);
