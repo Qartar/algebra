@@ -119,7 +119,7 @@ result<tokenized> tokenize(char const* str)
 }
 
 //------------------------------------------------------------------------------
-result<expression> parse_expression(token const*& tokens, token const* end);
+result<expression> parse_expression(token const*& tokens, token const* end, int precedence = INT_MAX);
 result<expression> parse_operand(token const*& tokens, token const* end);
 
 //------------------------------------------------------------------------------
@@ -162,7 +162,7 @@ result<expression> parse_binary_function(token const*& tokens, token const* end,
         ++tokens;
     }
 
-    result<expression> lhs = parse_operand(tokens, end);
+    result<expression> lhs = parse_expression(tokens, end);
     if (std::holds_alternative<error>(lhs)) {
         return std::get<error>(lhs);
     }
@@ -175,7 +175,7 @@ result<expression> parse_binary_function(token const*& tokens, token const* end,
         ++tokens;
     }
 
-    result<expression> rhs = parse_operand(tokens, end);
+    result<expression> rhs = parse_expression(tokens, end);
     if (std::holds_alternative<error>(rhs)) {
         return std::get<error>(rhs);
     }
@@ -291,6 +291,19 @@ result<expression> parse_operand_explicit(token const*& tokens, token const* end
 }
 
 //------------------------------------------------------------------------------
+constexpr int op_precedence(op_type t)
+{
+    switch (t) {
+        case op_type::sum: return 6;
+        case op_type::difference: return 6;
+        case op_type::product: return 5;
+        case op_type::quotient: return 5;
+        case op_type::exponent: return 4;
+        default: return 0;
+    }
+}
+
+//------------------------------------------------------------------------------
 result<expression> parse_operand(token const*& tokens, token const* end)
 {
     if (tokens >= end) {
@@ -319,12 +332,15 @@ result<expression> parse_operand(token const*& tokens, token const* end)
     if (std::holds_alternative<value>(out) || std::holds_alternative<constant>(out)) {
         token const* saved = tokens;
 
-        result<expression> next = parse_operand_explicit(tokens, end);
-        if (std::holds_alternative<error>(next)
-            || std::holds_alternative<value>(std::get<expression>(next))) {
-            tokens = saved;
-        } else {
-            out = op{op_type::product, out, std::get<expression>(next)};
+        // do not parse `3-x` as `(3)(-x)`
+        if (tokens < end && *tokens != '-') {
+            result<expression> next = parse_expression(tokens, end, op_precedence(op_type::product));
+            if (std::holds_alternative<error>(next)
+                || std::holds_alternative<value>(std::get<expression>(next))) {
+                tokens = saved;
+            } else {
+                out = op{op_type::product, out, std::get<expression>(next)};
+            }
         }
     }
 
@@ -337,71 +353,41 @@ result<expression> parse_operand(token const*& tokens, token const* end)
 }
 
 //------------------------------------------------------------------------------
-constexpr int precedence(op_type t)
-{
-    switch (t) {
-        case op_type::sum: return 6;
-        case op_type::difference: return 6;
-        case op_type::product: return 5;
-        case op_type::quotient: return 5;
-        case op_type::exponent: return 4;
-        default: return 0;
-    }
-}
-
-//------------------------------------------------------------------------------
-result<expression> parse_expression(token const*& tokens, token const* end)
+result<expression> parse_expression(token const*& tokens, token const* end, int precedence)
 {
     result<expression> lhs = parse_operand(tokens, end);
     if (std::holds_alternative<error>(lhs)) {
         return std::get<error>(lhs);
     }
 
-    // single operand, return immediately
-    if (tokens == end || *tokens == ')' || *tokens == ',') {
-        return std::get<expression>(lhs);
-    }
+    while (tokens < end && *tokens != ')' && *tokens != ',') {
+        token const* saved = tokens;
 
-    result<op_type> lhs_op = parse_operator(tokens, end);
-    if (std::holds_alternative<error>(lhs_op)) {
-        return std::get<error>(lhs_op);
-    }
+        result<op_type> lhs_op = parse_operator(tokens, end);
+        if (std::holds_alternative<error>(lhs_op)) {
+            return std::get<error>(lhs_op);
+        }
 
-    result<expression> mid = parse_operand(tokens, end);
-    if (std::holds_alternative<error>(mid)) {
-        return std::get<error>(mid);
-    }
-
-    // combine operands account for operator precedence
-    while (tokens < end) {
-        if (*tokens == ')' || *tokens == ',') {
+        int lhs_precedence = op_precedence(std::get<op_type>(lhs_op));
+        if (precedence <= lhs_precedence) {
+            tokens = saved;
             break;
         }
 
-        result<op_type> rhs_op = parse_operator(tokens, end);
-        if (std::holds_alternative<error>(rhs_op)) {
-            return std::get<error>(rhs_op);
-        }
-
-        result<expression> rhs = parse_operand(tokens, end);
+        result<expression> rhs = parse_expression(tokens, end, lhs_precedence);
         if (std::holds_alternative<error>(rhs)) {
             return std::get<error>(rhs);
-        }
-
-        //  (lhs op mid) op rhs         lhs op (mid op rhs)
-        //       v           v    or     v          v
-        //      lhs         mid         lhs        mid
-
-        if (precedence(std::get<op_type>(lhs_op)) <= precedence(std::get<op_type>(rhs_op))) {
-            lhs = op{std::get<op_type>(lhs_op), std::get<expression>(lhs), std::get<expression>(mid)};
-            lhs_op = rhs_op;
-            mid = rhs;
         } else {
-            mid = op{std::get<op_type>(rhs_op), std::get<expression>(mid), std::get<expression>(rhs)};
+            lhs = op{std::get<op_type>(lhs_op), std::get<expression>(lhs), std::get<expression>(rhs)};
         }
     }
 
-    return op{std::get<op_type>(lhs_op), std::get<expression>(lhs), std::get<expression>(mid)};
+    return lhs;
+
+    {
+        // file generates C2783 without this line, compiler bug?
+        result<expression> C2783; C2783 = lhs;
+    }
 }
 
 } // namespace parser
