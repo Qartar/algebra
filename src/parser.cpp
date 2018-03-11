@@ -277,6 +277,15 @@ result<expression> parse_operand_explicit(token const*& tokens, token const* end
         return v;
 
     //
+    // derivative
+    //
+
+    } else if (end - tokens > 2 && tokens[0] == 'd' && tokens[1] == '/' && tokens[2][0] == 'd') {
+        symbol s{tokens[2].begin + 1, tokens[2].end};
+        tokens += 3;
+        return parse_unary_function(tokens, end, op_type::derivative, s);
+
+    //
     //  symbols
     //
 

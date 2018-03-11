@@ -204,14 +204,63 @@ transform transforms[] = {
     { op{op_type::tangent, op{op_type::sum, constant::twopi, placeholder::x}}, op{op_type::tangent, placeholder::x} },
 
     //      sin(2x)  <=>  2 * sin(x) * cos(x)
+    { op{op_type::sine, op{op_type::product, constant::two, placeholder::x}}, op{op_type::product, constant::two,
+                                                                                                   op{op_type::product, op{op_type::sine, placeholder::x},
+                                                                                                                        op{op_type::cosine, placeholder::x}}} },
     //      cos(2x)  <=>  cos²(x) - sin²(x)
     //      cos(2x)  <=>  2 * cos²(x) - 1
+    { op{op_type::cosine, op{op_type::product, constant::two, placeholder::x}}, op{op_type::difference, op{op_type::product, constant::two,
+                                                                                                                             op{op_type::exponent, op{op_type::cosine, placeholder::x}, constant::two}},
+                                                                                                        constant::one} },
 
     //      sin(3x)  <=>  3 * sin(x) - 4 * sin³(x)
     //      cos(3x)  <=>  4 * cos³(x) - 3 * cos(x)
 
     //      sin²(x)  <=>  (1 - cos(2x)) / 2
     //      cos²(x)  <=>  (1 + cos(2x)) / 2
+
+    //
+    //  differentiation
+    //
+
+    //      d/dx(f + g)  <=>  d/dx(f) + d/dx(g)
+    { op{op_type::derivative, op{op_type::sum, placeholder::f, placeholder::g}, placeholder::x}, op{op_type::sum, op{op_type::derivative, placeholder::f, placeholder::x},
+                                                                                                                  op{op_type::derivative, placeholder::g, placeholder::x}} },
+    //      d/dx(f - g)  <=>  d/dx(f) - d/dx(g)
+    { op{op_type::derivative, op{op_type::difference, placeholder::f, placeholder::g}, placeholder::x}, op{op_type::difference, op{op_type::derivative, placeholder::f, placeholder::x},
+                                                                                                                                op{op_type::derivative, placeholder::g, placeholder::x}} },
+
+    // product rule
+    //      d/dx(f * g)  <=>  d/dx(f) * g + f * d/dx(g)
+    { op{op_type::derivative, op{op_type::product, placeholder::f, placeholder::g}, placeholder::x}, op{op_type::sum, op{op_type::product, op{op_type::derivative, placeholder::f, placeholder::x}, placeholder::g},
+                                                                                                                      op{op_type::product, placeholder::f, op{op_type::derivative, placeholder::g, placeholder::x}}} },
+
+    // quotient rule
+    //      d/dx(f / g)  <=>  (d/dx(f) * g - f * d/dx(g)) / g^2
+    { op{op_type::derivative, op{op_type::quotient, placeholder::f, placeholder::g}, placeholder::x}, op{op_type::quotient, op{op_type::difference, op{op_type::product, op{op_type::derivative, placeholder::f, placeholder::x}, placeholder::g},
+                                                                                                                                                    op{op_type::product, placeholder::f, op{op_type::derivative, placeholder::g, placeholder::x}}},
+                                                                                                                            op{op_type::exponent, placeholder::g, constant::two}} },
+
+    // chain rule
+    //  d/dx(f(g))  <=>  d/dx(f)(g) * d/dx(g)
+
+    // power rule
+    //      d/dx(x ^ r)  <=>  r * x ^ (r - 1)       (r != 0)
+    { op{op_type::derivative, op{op_type::exponent, placeholder::x, placeholder::r}, placeholder::x}, op{op_type::product, placeholder::r, op{op_type::exponent, placeholder::x, op{op_type::difference, placeholder::r, constant::one}}} },
+
+    // d/dx(sin(x))  <=>  cos(x)
+    //{ op{op_type::derivative, op{op_type::sine, placeholder::x}, placeholder::x}, op{op_type::cosine, placeholder::x} },
+    // d/dx(cos(x))  <=>  -sin(x)
+    //{ op{op_type::derivative, op{op_type::cosine, placeholder::x}, placeholder::x}, op{op_type::negative, op{op_type::sine, placeholder::x}} },
+    // d/dx(tan(x))  <=>  sec²(x)
+    //{ op{op_type::derivative, op{op_type::tangent, placeholder::x}, placeholder::x}, op{op_type::exponent, op{op_type::secant, placeholder::x}, constant::two} },
+
+    // d/dx(sin(f))  <=>  d/dx(f) * cos(f)
+    { op{op_type::derivative, op{op_type::sine, placeholder::f}, placeholder::x}, op{op_type::product, op{op_type::derivative, placeholder::f, placeholder::x}, op{op_type::cosine, placeholder::f}} },
+    // d/dx(cos(f))  <=>  d/dx(f) * -sin(f)
+    { op{op_type::derivative, op{op_type::cosine, placeholder::f}, placeholder::x}, op{op_type::product, op{op_type::derivative, placeholder::f, placeholder::x}, op{op_type::negative, op{op_type::sine, placeholder::f}}} },
+    // d/dx(tan(f))  <=>  d/dx(f) * sec²(f)
+    { op{op_type::derivative, op{op_type::tangent, placeholder::f}, placeholder::x}, op{op_type::product, op{op_type::derivative, placeholder::f, placeholder::x}, op{op_type::exponent, op{op_type::secant, placeholder::f}, constant::two}} },
 };
 
 //------------------------------------------------------------------------------
@@ -234,6 +283,7 @@ std::string to_string(expression const& in)
             case op_type::secant: return std::string("sec(") + to_string(in_op.lhs) + ")";
             case op_type::cosecant: return std::string("csc(") + to_string(in_op.lhs) + ")";
             case op_type::cotangent: return std::string("cot(") + to_string(in_op.lhs) + ")";
+            case op_type::derivative: return std::string("d/d") + to_string(in_op.rhs) + "(" + to_string(in_op.lhs) + ")";
             default: assert(0); return "";
         }
     } else if (std::holds_alternative<value>(in)) {
