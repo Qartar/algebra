@@ -26,7 +26,7 @@ enum class op_type
     reciprocal,     //!< 1 / `lhs`
     exponent,       //!< `lhs` raised to the power of `rhs`
     logarithm,      //!< logarithm of `lhs` using base `rhs`
-    derivative,     //!< derivative of `lhs` with respect to `rhs`
+    derivative,     //!< derivative of `rhs` with respect to `lhs`
     integral,       //!< integral of `lhs` with respect to `rhs`
     differential,   //!< differential of `lhs` for integration
 };

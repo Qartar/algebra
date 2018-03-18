@@ -320,6 +320,7 @@ result<expression> parse_operand_explicit(token const*& tokens, token const* end
         if (std::holds_alternative<error>(expr)) {
             return std::get<error>(expr);
         }
+
         return op{op_type::derivative, s, std::get<expression>(expr)};
 
     //
@@ -374,6 +375,17 @@ result<expression> parse_operand(token const*& tokens, token const* end)
             } else {
                 out = op{op_type::product, out, std::get<expression>(next)};
             }
+        }
+
+    // check for function call
+    } else if ((std::holds_alternative<op>(out) && std::get<op>(out).type == op_type::derivative)
+            || std::holds_alternative<symbol>(out)) {
+        if (tokens < end && *tokens == "(") {
+            result<expression> args = parse_operand(tokens, end);
+            if (std::holds_alternative<error>(args)) {
+                return std::get<error>(args);
+            }
+            out = op{op_type::function, out, std::get<expression>(args)};
         }
     }
 
@@ -430,6 +442,7 @@ void print_error(char const* str, parser::error const& err)
 {
     std::ptrdiff_t offset = err.tok.begin - str;
     std::ptrdiff_t length = err.tok.end - err.tok.begin;
+    printf("%s\n", str);
     for (std::ptrdiff_t ii = 0; ii < offset; ++ii) {
         printf(" ");
     }

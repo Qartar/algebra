@@ -37,11 +37,16 @@ char const* transform_strings[] = {
     "x * 0 = 0",
 
     // additive inverse
+    "-(-x) = x", // reflexive property
     "x + (-x) = 0",
     "-x = 0 - x",
     "x + (-y) = x - y",
+    "-x * y = x * -y", // -x * y => (-1 * x) * y => x * (-1 * y) => x * -y
+    "-x * -y = x * y", // -x * -y => (-1 * x) * (-1 * y) => (-1 * -1) * (x * y) => 1 * (x * y) => x * y
+    "-x = -1 * x",
 
     // multiplicative inverse
+    "1/(1/x) = x", // x != 0; reflexive property
     "x * (x^-1) = 1",
     "1/x = 1 / x",
     "x * (1/y) = x / y",
@@ -61,9 +66,11 @@ char const* transform_strings[] = {
     "b ^ log(x, b) = x",
 
     // exponentiation identity
-    "b ^ x * b ^ y = b ^ (x + y)",
+    "(b ^ x) * (b ^ y) = b ^ (x + y)",
 
     "(b ^ x) ^ y = b ^ (x * y)",
+
+    "x * (x ^ y) = x ^ (y + 1)",
 
     // distributivity over multiplication
     "(x * y) ^ n = (x ^ n) * (y ^ n)",
@@ -98,6 +105,8 @@ char const* transform_strings[] = {
     "cos(0) = 1",
     "sin(pi/2) = 1",
     "cos(pi/2) = 0",
+    "sin(pi) = 0",
+    "cos(pi) = -1",
 
     "tan(x) = sin(x) / cos(x)",
     "sec(x) = 1 / cos(x)",
@@ -146,34 +155,34 @@ char const* transform_strings[] = {
     //  differentiation
     //
 
-    "d/dx(f + g) = d/dx(f) + d/dx(g)",
-    "d/dx(f - g) = d/dx(f) - d/dx(g)",
+    "d/dx(f(x) + g(x)) = d/dx(f(x)) + d/dx(g(x))",
+    "d/dx(f(x) - g(x)) = d/dx(f(x)) - d/dx(g(x))",
 
     // product rule
-    "d/dx(f * g) = d/dx(f) * g + f * d/dx(g)",
+    "d/dx(f(x) * g(x)) = d/dx(f(x)) * g(x) + f(x) * d/dx(g(x))",
 
     // quotient rule
-    "d/dx(f / g) = (d/dx(f) * g - f * d/dx(g)) / g^2",
+    "d/dx(f(x) / g(x)) = (d/dx(f(x)) * g(x) - f(x) * d/dx(g(x))) / g(x)^2",
 
     // chain rule
-    //"d/dx(f(g)) = d/dx(f)(g) * d/dx(g)",
+    "d/dx(f(g(x))) = d/dx(f)(g(x)) * d/dx(g(x))",
 
     // power rule
     "d/dx(x) = 1",
     "d/dx(x ^ r) = r * x ^ (r - 1)", // (r != 0),
 
     "d/dx(ln(x)) = 1/x",
-    "d/dx(ln(f)) = d/dx(f) / x",
+    "d/dx(ln(f(x))) = d/dx(f(x)) / x",
     "d/dx(exp(x)) = exp(x)",
-    "d/dx(exp(f)) = d/dx(f) * exp(f)",
+    "d/dx(exp(f(x))) = d/dx(f(x)) * exp(f)",
 
     "d/dx(sin(x)) = cos(x)",
     "d/dx(cos(x)) = -sin(x)",
     "d/dx(tan(x)) = sec(x) ^ 2",
 
-    "d/dx(sin(f)) = d/dx(f) * cos(f)",
-    "d/dx(cos(f)) = d/dx(f) * -sin(f)",
-    "d/dx(tan(f)) = d/dx(f) * sec(f) ^ 2",
+    "d/dx(sin(f(x))) = d/dx(f(x)) * cos(f(x))",
+    "d/dx(cos(f(x))) = d/dx(f(x)) * -sin(f(x))",
+    "d/dx(tan(f(x))) = d/dx(f(x)) * sec(f(x)) ^ 2",
 };
 
 std::vector<transform> transforms;
@@ -243,6 +252,26 @@ std::string to_string(expression const& in)
 }
 
 //------------------------------------------------------------------------------
+bool match_r(expression const& lhs, expression const& rhs, std::map<placeholder, expression>& placeholders);
+
+//------------------------------------------------------------------------------
+bool match_placeholder(placeholder const& pl, expression const& expr, std::map<placeholder, expression>& placeholders)
+{
+    auto it = placeholders.find(pl);
+    if (it != placeholders.end()) {
+        std::map<placeholder, expression> expr_placeholders = placeholders;
+        if (!match_r(it->second, expr, expr_placeholders)) {
+            return false;
+        }
+        placeholders = expr_placeholders;
+        return true;
+    } else {
+        placeholders[pl] = expr;
+        return true;
+    }
+}
+
+//------------------------------------------------------------------------------
 bool match_r(expression const& lhs, expression const& rhs, std::map<placeholder, expression>& placeholders)
 {
     // compare placeholders
@@ -250,20 +279,9 @@ bool match_r(expression const& lhs, expression const& rhs, std::map<placeholder,
         return std::get<placeholder>(lhs) == std::get<placeholder>(rhs);
     } else if (std::holds_alternative<placeholder>(lhs) || std::holds_alternative<placeholder>(rhs)) {
         if (std::holds_alternative<placeholder>(lhs)) {
-            auto pl = placeholders.find(std::get<placeholder>(lhs));
-            if (pl != placeholders.end()) {
-                std::map<placeholder, expression> rhs_placeholders = placeholders;
-                if (!match_r(pl->second, rhs, rhs_placeholders)) {
-                    return false;
-                }
-                placeholders = rhs_placeholders;
-                return true;
-            } else {
-                placeholders[std::get<placeholder>(lhs)] = rhs;
-                return true;
-            }
+            return match_placeholder(std::get<placeholder>(lhs), rhs, placeholders);
         } else {
-            return match_r(rhs, lhs, placeholders);
+            return match_placeholder(std::get<placeholder>(rhs), lhs, placeholders);
         }
 
     // compare values
@@ -304,6 +322,18 @@ bool match_r(expression const& lhs, expression const& rhs, std::map<placeholder,
     // compare empty
     } else if (std::holds_alternative<empty>(lhs) && std::holds_alternative<empty>(rhs)) {
         return true;
+
+    // compare placeholder function
+    } else if (std::holds_alternative<op>(lhs) && std::get<op>(lhs).type == op_type::function
+               && std::holds_alternative<placeholder>((expression const&)std::get<op>(lhs).lhs)) {
+        op const& lhs_op = std::get<op>(lhs);
+        return match_placeholder(std::get<placeholder>((expression const&)lhs_op.lhs), rhs, placeholders);
+
+    // compare placeholder function
+    } else if (std::holds_alternative<op>(rhs) && std::get<op>(rhs).type == op_type::function
+               && std::holds_alternative<placeholder>((expression const&)std::get<op>(rhs).lhs)) {
+        op const& rhs_op = std::get<op>(rhs);
+        return match_placeholder(std::get<placeholder>((expression const&)rhs_op.lhs), lhs, placeholders);
 
     // no match
     } else {
@@ -390,6 +420,9 @@ expression apply_transform_r(
         return placeholders.at(std::get<placeholder>(target));
     } else if (std::holds_alternative<op>(target)) {
         op const& target_op = std::get<op>(target);
+        if (target_op.type == op_type::function && std::holds_alternative<placeholder>((expression const&)target_op.lhs)) {
+            return placeholders.at(std::get<placeholder>((expression const&)target_op.lhs));
+        }
         return op{target_op.type, apply_transform_r(source, target_op.lhs, placeholders),
                                   apply_transform_r(source, target_op.rhs, placeholders)};
     } else {
@@ -513,6 +546,20 @@ bool resolve_transforms()
 }
 
 //------------------------------------------------------------------------------
+bool has_subexpression(expression const& expr, expression const& subexpr)
+{
+    if (!compare(expr, subexpr)) {
+        return true;
+    } else if (std::holds_alternative<op>(expr)) {
+        op const& expr_op = std::get<op>(expr);
+        return has_subexpression(expr_op.lhs, subexpr)
+            || has_subexpression(expr_op.rhs, subexpr);
+    } else {
+        return false;
+    }
+}
+
+//------------------------------------------------------------------------------
 std::set<expression, expression_cmp> enumerate_transforms(expression const& expr)
 {
     static std::map<expression, std::set<expression, expression_cmp>, expression_cmp> cached;
@@ -570,9 +617,11 @@ std::set<expression, expression_cmp> enumerate_transforms(expression const& expr
     // transform subexpressions
     if (std::holds_alternative<op>(expr)) {
         op const& expr_op = std::get<op>(expr);
-        auto lhs_tr = enumerate_transforms(expr_op.lhs);
-        for (auto const& tr : lhs_tr) {
-            out.insert(op{expr_op.type, tr, expr_op.rhs});
+        if (expr_op.type != op_type::function && expr_op.type != op_type::derivative) {
+            auto lhs_tr = enumerate_transforms(expr_op.lhs);
+            for (auto const& tr : lhs_tr) {
+                out.insert(op{expr_op.type, tr, expr_op.rhs});
+            }
         }
         auto rhs_tr = enumerate_transforms(expr_op.rhs);
         for (auto const& tr : rhs_tr) {
@@ -597,6 +646,11 @@ std::set<expression, expression_cmp> enumerate_transforms(expression const& expr
                 case op_type::quotient: out.insert(lhs / rhs); break;
                 case op_type::exponent: out.insert(std::pow(lhs, rhs)); break;
             }
+        // simplify derivatives of constant value
+        } else if (expr_op.type == op_type::derivative) {
+            if (!has_subexpression(expr_op.rhs, expr_op.lhs)) {
+                out.insert(0.0);
+            }
         }
     }
 
@@ -604,10 +658,35 @@ std::set<expression, expression_cmp> enumerate_transforms(expression const& expr
     return out;
 }
 
+//------------------------------------------------------------------------------
+bool has_op(expression const& expr, op_type type)
+{
+    if (std::holds_alternative<op>(expr)) {
+        op const& expr_op = std::get<op>(expr);
+        if (expr_op.type == type) {
+            return true;
+        } else {
+            return has_op(expr_op.lhs, type) || has_op(expr_op.rhs, type);
+        }
+    } else {
+        return false;
+    }
+}
+
 struct expression_queue_cmp
 {
     bool operator()(expression const& lhs, expression const& rhs) const
     {
+        // check for differentiation
+        bool lhs_has_derivative = has_op(lhs, op_type::derivative);
+        bool rhs_has_derivative = has_op(rhs, op_type::derivative);
+
+        if (lhs_has_derivative && !rhs_has_derivative) {
+            return true;
+        } else if (!lhs_has_derivative && rhs_has_derivative) {
+            return false;
+        }
+
         return op_count(lhs) > op_count(rhs);
     }
 };
@@ -633,8 +712,8 @@ expression simplify(expression const& expr, std::size_t max_operations, std::siz
     closed.insert(expr);
 
     // smallest expression found in search
+    expression_queue_cmp compare;
     expression best = expr;
-    std::size_t best_ops = op_count(best);
 
     for (std::size_t ii = 0; ii < max_iterations && queue.size(); ++ii) {
         auto const next = queue.top();
@@ -642,9 +721,8 @@ expression simplify(expression const& expr, std::size_t max_operations, std::siz
         //printf("%s\n", to_string(next).c_str());
 
         std::size_t next_ops = op_count(next);
-        if (next_ops < best_ops) {
+        if (compare(best, next)) {
             best = next;
-            best_ops = next_ops;
         }
 
         // exceeded maximum complexity
