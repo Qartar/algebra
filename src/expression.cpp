@@ -74,6 +74,13 @@ char const* transform_strings[] = {
 
     "log(1, x) = 0",
 
+    // function equivalence
+    "log(x, e) = ln(x)",
+    "log(x, y) = ln(x) / ln(y)",
+
+    "e ^ x = exp(x)",
+    "a ^ x = exp(x * ln(a))",
+
     //
     //  complex numbers
     //
@@ -152,7 +159,13 @@ char const* transform_strings[] = {
     //"d/dx(f(g)) = d/dx(f)(g) * d/dx(g)",
 
     // power rule
+    "d/dx(x) = 1",
     "d/dx(x ^ r) = r * x ^ (r - 1)", // (r != 0),
+
+    "d/dx(ln(x)) = 1/x",
+    "d/dx(ln(f)) = d/dx(f) / x",
+    "d/dx(exp(x)) = exp(x)",
+    "d/dx(exp(f)) = d/dx(f) * exp(f)",
 
     "d/dx(sin(x)) = cos(x)",
     "d/dx(cos(x)) = -sin(x)",
@@ -171,6 +184,28 @@ std::string to_string(expression const& in)
     if (std::holds_alternative<op>(in)) {
         op const& in_op = std::get<op>(in);
         switch (in_op.type) {
+            case op_type::function: {
+                if (std::holds_alternative<function>((expression const&)in_op.lhs)) {
+                    function fn = std::get<function>((expression const&)in_op.lhs);
+                    switch (fn) {
+                        case function::exponent: return std::string("exp(") + to_string(in_op.rhs) + ")";
+                        case function::logarithm: return std::string("ln(") + to_string(in_op.rhs) + ")";
+                        case function::sine: return std::string("sin(") + to_string(in_op.rhs) + ")";
+                        case function::cosine: return std::string("cos(") + to_string(in_op.rhs) + ")";
+                        case function::tangent: return std::string("tan(") + to_string(in_op.rhs) + ")";
+                        case function::secant: return std::string("sec(") + to_string(in_op.rhs) + ")";
+                        case function::cosecant: return std::string("csc(") + to_string(in_op.rhs) + ")";
+                        case function::cotangent: return std::string("cot(") + to_string(in_op.rhs) + ")";
+                        default: assert(0); return "";
+                    }
+                } else if (std::holds_alternative<symbol>((expression const&)in_op.lhs)
+                        || std::holds_alternative<placeholder>((expression const&)in_op.lhs)) {
+                    return to_string(in_op.lhs) + "(" + to_string(in_op.rhs) + ")";
+                } else {
+                    assert(0); return "";
+                }
+            }
+            case op_type::comma: return to_string(in_op.lhs) + ", " + to_string(in_op.rhs);
             case op_type::equality: return to_string(in_op.lhs) + " = " + to_string(in_op.rhs);
             case op_type::sum: return std::string("(") + to_string(in_op.lhs) + " + " + to_string(in_op.rhs) + ")";
             case op_type::difference: return std::string("(") + to_string(in_op.lhs) + " - " + to_string(in_op.rhs) + ")";
@@ -180,13 +215,7 @@ std::string to_string(expression const& in)
             case op_type::reciprocal: return std::string("(1/") + to_string(in_op.lhs) + ")";
             case op_type::exponent: return std::string("(") + to_string(in_op.lhs) + " ^ " + to_string(in_op.rhs) + ")";
             case op_type::logarithm: return std::string("log(") + to_string(in_op.lhs) + ", " + to_string(in_op.rhs) + ")";
-            case op_type::sine: return std::string("sin(") + to_string(in_op.lhs) + ")";
-            case op_type::cosine: return std::string("cos(") + to_string(in_op.lhs) + ")";
-            case op_type::tangent: return std::string("tan(") + to_string(in_op.lhs) + ")";
-            case op_type::secant: return std::string("sec(") + to_string(in_op.lhs) + ")";
-            case op_type::cosecant: return std::string("csc(") + to_string(in_op.lhs) + ")";
-            case op_type::cotangent: return std::string("cot(") + to_string(in_op.lhs) + ")";
-            case op_type::derivative: return std::string("d/d") + to_string(in_op.rhs) + "(" + to_string(in_op.lhs) + ")";
+            case op_type::derivative: return std::string("d/d") + to_string(in_op.lhs) + "(" + to_string(in_op.rhs) + ")";
             default: assert(0); return "";
         }
     } else if (std::holds_alternative<value>(in)) {
@@ -267,6 +296,10 @@ bool match_r(expression const& lhs, expression const& rhs, std::map<placeholder,
         }
         placeholders = std::move(op_placeholders);
         return true;
+
+    // compare functions
+    } else if (std::holds_alternative<function>(lhs) && std::holds_alternative<function>(rhs)) {
+        return std::get<function>(lhs) == std::get<function>(rhs);
 
     // compare empty
     } else if (std::holds_alternative<empty>(lhs) && std::holds_alternative<empty>(rhs)) {
@@ -398,6 +431,10 @@ int compare(expression const& lhs, expression const& rhs)
             } else {
                 return 1;
             }
+        // compare functions by enum value
+        } else if (std::holds_alternative<function>(lhs)) {
+            assert(std::holds_alternative<function>(rhs));
+            return static_cast<int>(std::get<function>(lhs)) - static_cast<int>(std::get<function>(rhs));
         // compare constants by enum value
         } else if (std::holds_alternative<constant>(lhs)) {
             assert(std::holds_alternative<constant>(rhs));

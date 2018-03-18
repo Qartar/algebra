@@ -4,6 +4,7 @@
 #include "parser.h"
 
 #include <cassert>
+#include <algorithm>
 
 namespace algebra {
 namespace parser {
@@ -19,20 +20,24 @@ struct token
         return begin[index];
     }
 
-    bool operator==(char const* str) const {
-        assert(begin != end);
-        return strncmp(begin, str, end - begin) == 0;
+    template<std::size_t size> bool operator==(char const (&str)[size]) const {
+        assert(begin < end);
+        return strncmp(begin, str, std::max<std::ptrdiff_t>(end - begin, size - 1)) == 0;
     }
-    bool operator!=(char const* str) const {
-        assert(begin != end);
-        return strncmp(begin, str, end - begin) != 0;
+
+    template<std::size_t size> bool operator!=(char const (&str)[size]) const {
+        assert(begin < end);
+        return strncmp(begin, str, std::max<std::ptrdiff_t>(end - begin, size - 1)) != 0;
     }
 
     bool operator==(char ch) const {
+        assert(begin < end);
         return *begin == ch && end == begin + 1;
     }
+
     bool operator!=(char ch) const {
-        return  *begin != ch || end != begin + 1;
+        assert(begin < end);
+        return *begin != ch || end != begin + 1;
     }
 };
 
@@ -124,17 +129,35 @@ result<expression> parse_expression(token const*& tokens, token const* end, int 
 result<expression> parse_operand(token const*& tokens, token const* end);
 
 //------------------------------------------------------------------------------
+constexpr int op_precedence(op_type t)
+{
+    switch (t) {
+        case op_type::equality: return 16;
+        case op_type::comma: return 17;
+        case op_type::sum: return 6;
+        case op_type::difference: return 6;
+        case op_type::product: return 5;
+        case op_type::quotient: return 5;
+        case op_type::exponent: return 4;
+        default: return 0;
+    }
+}
+
+//------------------------------------------------------------------------------
 result<op_type> parse_operator(token const*& tokens, token const* end)
 {
     if (tokens >= end) {
         return error{*(tokens - 1), "expected operator after '" + *(tokens - 1) + "'"};
-    } else if (*tokens == ')' || *tokens == ',') {
+    } else if (*tokens == ')') {
         return error{*tokens, "expected operator after '" + *(tokens - 1) + "', found '" + *tokens + "'"};
     }
 
     if (tokens[0] == '=') {
         ++tokens;
         return op_type::equality;
+    } else if (tokens[0] == ',') {
+        ++tokens;
+        return op_type::comma;
     } else if (tokens[0] == '+') {
         ++tokens;
         return op_type::sum;
@@ -171,17 +194,13 @@ result<expression> parse_binary_function(token const*& tokens, token const* end,
         return std::get<error>(lhs);
     }
 
-    if (tokens >= end) {
-        return error{*(tokens - 1), "expected ',' after '" + *(tokens - 1) + "'"};
-    } else if (*tokens != ',') {
-        return error{*tokens, "expected ',' after '" + *(tokens - 1) + "', found '" + *tokens + "'"};
-    } else {
-        ++tokens;
+    if (!std::holds_alternative<op>((expression const&)lhs)) {
+        return error{};
     }
 
-    result<expression> rhs = parse_expression(tokens, end);
-    if (std::holds_alternative<error>(rhs)) {
-        return std::get<error>(rhs);
+    op const& lhs_op = std::get<op>((expression const&)lhs);
+    if (lhs_op.type != op_type::comma) {
+        return error{};
     }
 
     if (tokens >= end) {
@@ -192,17 +211,33 @@ result<expression> parse_binary_function(token const*& tokens, token const* end,
         ++tokens;
     }
 
-    return op{type, std::get<expression>(lhs), std::get<expression>(rhs)};
+    return op{type, lhs_op.lhs, lhs_op.rhs};
 }
 
 //------------------------------------------------------------------------------
-result<expression> parse_unary_function(token const*& tokens, token const* end, op_type type, expression const& rhs = empty{})
+std::size_t count_arguments(expression const& expr)
 {
+    if (std::holds_alternative<op>(expr)) {
+        op const& expr_op = std::get<op>(expr);
+        if (expr_op.type == op_type::comma) {
+            return 1 + count_arguments(expr_op.rhs);
+        }
+    }
+    return 1;
+}
+
+//------------------------------------------------------------------------------
+result<expression> parse_function(token const*& tokens, token const* end, function fn, std::size_t num_args = 1)
+{
+    token const* start = tokens;
     result<expression> arg = parse_operand(tokens, end);
     if (std::holds_alternative<error>(arg)) {
         return std::get<error>(arg);
+    } else if (count_arguments(std::get<expression>(arg)) != num_args) {
+        std::size_t n = count_arguments(std::get<expression>(arg));
+        return error{{start->begin, (tokens - 1)->end}, "function '" + *(start - 1) + "' does not take " + std::to_string(n) + " arguments"};
     }
-    return op{type, std::get<expression>(arg), rhs};
+    return op{op_type::function, fn, std::get<expression>(arg)};
 }
 
 //------------------------------------------------------------------------------
@@ -210,7 +245,7 @@ result<expression> parse_operand_explicit(token const*& tokens, token const* end
 {
     if (tokens >= end) {
         return error{*(tokens - 1), "expected expression after '" + *(tokens - 1) + "'"};
-    } else if (*tokens == ')' || *tokens == ',') {
+    } else if (*tokens == ')') {
         return error{*tokens, "expected expression after '" + *(tokens - 1) + "', found '" + *tokens + "'"};
     }
 
@@ -231,22 +266,24 @@ result<expression> parse_operand_explicit(token const*& tokens, token const* end
     //  functions
     //
 
+    } else if (*tokens == "exp") {
+        return parse_function(++tokens, end, function::exponent);
     } else if (*tokens == "ln") {
-        return parse_unary_function(++tokens, end, op_type::logarithm, constant::e);
+        return parse_function(++tokens, end, function::logarithm);
     } else if (*tokens == "log") {
         return parse_binary_function(++tokens, end, op_type::logarithm);
     } else if (*tokens == "sin") {
-        return parse_unary_function(++tokens, end, op_type::sine);
+        return parse_function(++tokens, end, function::sine);
     } else if (*tokens == "cos") {
-        return parse_unary_function(++tokens, end, op_type::cosine);
+        return parse_function(++tokens, end, function::cosine);
     } else if (*tokens == "tan") {
-        return parse_unary_function(++tokens, end, op_type::tangent);
+        return parse_function(++tokens, end, function::tangent);
     } else if (*tokens == "sec") {
-        return parse_unary_function(++tokens, end, op_type::secant);
+        return parse_function(++tokens, end, function::secant);
     } else if (*tokens == "csc") {
-        return parse_unary_function(++tokens, end, op_type::cosecant);
+        return parse_function(++tokens, end, function::cosecant);
     } else if (*tokens == "cot") {
-        return parse_unary_function(++tokens, end, op_type::cotangent);
+        return parse_function(++tokens, end, function::cotangent);
 
     //
     //  constants
@@ -278,7 +315,12 @@ result<expression> parse_operand_explicit(token const*& tokens, token const* end
     } else if (end - tokens > 2 && tokens[0] == 'd' && tokens[1] == '/' && tokens[2][0] == 'd') {
         symbol s{tokens[2].begin + 1, tokens[2].end};
         tokens += 3;
-        return parse_unary_function(tokens, end, op_type::derivative, s);
+
+        result<expression> expr = parse_operand(tokens, end);
+        if (std::holds_alternative<error>(expr)) {
+            return std::get<error>(expr);
+        }
+        return op{op_type::derivative, s, std::get<expression>(expr)};
 
     //
     //  symbols
@@ -295,25 +337,11 @@ result<expression> parse_operand_explicit(token const*& tokens, token const* end
 }
 
 //------------------------------------------------------------------------------
-constexpr int op_precedence(op_type t)
-{
-    switch (t) {
-        case op_type::equality: return 16;
-        case op_type::sum: return 6;
-        case op_type::difference: return 6;
-        case op_type::product: return 5;
-        case op_type::quotient: return 5;
-        case op_type::exponent: return 4;
-        default: return 0;
-    }
-}
-
-//------------------------------------------------------------------------------
 result<expression> parse_operand(token const*& tokens, token const* end)
 {
     if (tokens >= end) {
         return error{*(tokens - 1), "expected expression after '" + *(tokens - 1) + "'"};
-    } else if (*tokens == ')' || *tokens == ',') {
+    } else if (*tokens == ')') {
         return error{*tokens, "expected expression after '" + *(tokens - 1) + "', found '" + *tokens + "'"};
     }
 
@@ -365,7 +393,7 @@ result<expression> parse_expression(token const*& tokens, token const* end, int 
         return std::get<error>(lhs);
     }
 
-    while (tokens < end && *tokens != ')' && *tokens != ',') {
+    while (tokens < end && *tokens != ')') {
         token const* saved = tokens;
 
         result<op_type> lhs_op = parse_operator(tokens, end);
@@ -374,7 +402,7 @@ result<expression> parse_expression(token const*& tokens, token const* end, int 
         }
 
         int lhs_precedence = op_precedence(std::get<op_type>(lhs_op));
-        if (precedence <= lhs_precedence) {
+        if (precedence <= lhs_precedence && precedence != op_precedence(op_type::comma)) {
             tokens = saved;
             break;
         }

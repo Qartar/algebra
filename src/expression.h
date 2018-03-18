@@ -15,6 +15,8 @@ namespace algebra {
 //! operations and functions
 enum class op_type
 {
+    function,       //!< `lhs`(`rhs`)
+    comma,          //!< `lhs, `rhs`
     equality,       //!< `lhs` = `rhs`
     sum,            //!< `lhs` + `rhs`
     difference,     //!< `lhs` - `rhs`
@@ -24,24 +26,25 @@ enum class op_type
     reciprocal,     //!< 1 / `lhs`
     exponent,       //!< `lhs` raised to the power of `rhs`
     logarithm,      //!< logarithm of `lhs` using base `rhs`
-    sine,           //!< sine of `lhs`
-    cosine,         //!< cosine of  `lhs`
-    tangent,        //!< tangent of `lhs`
-    secant,         //!< secant of `lhs`
-    cosecant,       //!< cosecant of `lhs`
-    cotangent,      //!< cotangent of `lhs`
-    arcsine,        //!< inverse sine of `lhs`
-    arccosine,      //!< inverse cosine of `lhs`
-    arctangent,     //!< inverse tangent of `lhs`
-    arcsecant,      //!< inverse secant of `lhs`
-    arccosecant,    //!< inverse cosecant of `lhs`
-    arccotangent,   //!< inverse cotangent of `lhs`
     derivative,     //!< derivative of `lhs` with respect to `rhs`
     integral,       //!< integral of `lhs` with respect to `rhs`
     differential,   //!< differential of `lhs` for integration
 };
 
 class expression;
+
+//------------------------------------------------------------------------------
+enum class function
+{
+    exponent,       //!< exponential function
+    logarithm,      //!< natural logarithm
+    sine,           //!< sine
+    cosine,         //!< cosine
+    tangent,        //!< tangent
+    secant,         //!< secant
+    cosecant,       //!< cosecant
+    cotangent,      //!< cotangent
+};
 
 //------------------------------------------------------------------------------
 //! common constant and transcendental values
@@ -82,7 +85,7 @@ using value = double;
 using symbol = std::string;
 
 //------------------------------------------------------------------------------
-using expression_base = std::variant<empty, op, constant, value, symbol, placeholder>;
+using expression_base = std::variant<empty, op, function, constant, value, symbol, placeholder>;
 class expression : public expression_base
 {
 public:
