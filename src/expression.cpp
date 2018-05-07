@@ -14,9 +14,11 @@ namespace algebra {
 char const* transform_strings[] = {
     // associativity of addition
     "(x + y) + z = x + (y + z)",
+    "x + (y + z) = (x + y) + z",
 
     // associativity of multiplication
     "(x * y) * z = x * (y * z)",
+    "x * (y * z) = (x * y) * z",
 
     // commutativity of addition
     "x + y = y + x",
@@ -26,6 +28,7 @@ char const* transform_strings[] = {
 
     // distributivity of multiplication over addition
     "a * (x + y) = a * x + a * y",
+    "a * x + a * y = a * (x + y)",
 
     // additive identity
     "x + 0 = x",
@@ -47,7 +50,9 @@ char const* transform_strings[] = {
     "x * (1/y) = x / y",
 
     "x + x = x * 2",
+    "x * 2 = x + x",
     "x * x = x ^ 2",
+    "x ^ 2 = x * x",
 
     //
     //  exponentiation and logarithms
@@ -553,18 +558,18 @@ std::set<expression, expression_cmp> enumerate_transforms(expression const& expr
             }
         }
 
-        if (target_placeholders.size() == merged_placeholders.size()) {
-            if (match(expr, tr.target, expr_placeholders) && match_placeholders(expr_placeholders, merged_placeholders)) {
-                auto expr_tr = apply_transform_r(expr, tr.source, expr_placeholders);
-                assert(match(expr_tr, tr.source, expr_placeholders));
-                assert(enumerate_placeholders(expr_tr).size() == 0);
-                //printf("    %-40s %-20s  =>  %20s\n", to_string(expr_tr).c_str(), to_string(tr.target).c_str(), to_string(tr.source).c_str());
-                //for (auto const& pl : expr_placeholders) {
-                //    printf("    %50s %s: %s\n", "", to_string(pl.first).c_str(), to_string(pl.second).c_str());
-                //}
-                out.insert(expr_tr);
-            }
-        }
+        //if (target_placeholders.size() == merged_placeholders.size()) {
+        //    if (match(expr, tr.target, expr_placeholders) && match_placeholders(expr_placeholders, merged_placeholders)) {
+        //        auto expr_tr = apply_transform_r(expr, tr.source, expr_placeholders);
+        //        assert(match(expr_tr, tr.source, expr_placeholders));
+        //        assert(enumerate_placeholders(expr_tr).size() == 0);
+        //        //printf("    %-40s %-20s  =>  %20s\n", to_string(expr_tr).c_str(), to_string(tr.target).c_str(), to_string(tr.source).c_str());
+        //        //for (auto const& pl : expr_placeholders) {
+        //        //    printf("    %50s %s: %s\n", "", to_string(pl.first).c_str(), to_string(pl.second).c_str());
+        //        //}
+        //        out.insert(expr_tr);
+        //    }
+        //}
     }
 
     // transform subexpressions
